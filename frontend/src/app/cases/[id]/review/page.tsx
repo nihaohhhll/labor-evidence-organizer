@@ -1,0 +1,225 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { ApiError, api, getToken } from "@/lib/api";
+import type { EvidenceRow, ReviewItem } from "@/lib/types";
+
+type ViewState =
+  | { kind: "loading" }
+  | { kind: "error"; message: string }
+  | { kind: "ready"; items: ReviewItem[]; evidence: EvidenceRow[] };
+
+const FIELD_LABEL: Record<string, string> = {
+  summary: "内容摘要",
+  proof_purpose: "证明目的",
+  category: "分类",
+  title: "证据名称",
+};
+
+function valueText(v: Record<string, string | null> | null, field: string): string {
+  if (!v) return "（无）";
+  const raw = v[field];
+  return raw === null || raw === undefined || raw === "" ? "（无）" : String(raw);
+}
+
+/**
+ * 审核工作台 (docs/09 FRONTEND_SPEC).
+ *
+ * Desktop: the original file on the left, the structured result on the right.
+ * Mobile: stacked. The AI value and the user's value are always shown
+ * side by side so a human can see exactly what they are changing.
+ */
+export default function ReviewPage() {
+  const params = useParams<{ id: string }>();
+  const router = useRouter();
+  const [state, setState] = useState<ViewState>({ kind: "loading" });
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [notice, setNotice] = useState<string | null>(null);
+  const [activeFileId, setActiveFileId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setState({ kind: "loading" });
+    try {
+      const [items, evidence] = await Promise.all([
+        api.listReviewItems(params.id),
+        api.listEvidence(params.id),
+      ]);
+      setState({ kind: "ready", items: items.items, evidence: evidence.evidence });
+      const first = evidence.evidence.find((e) => e.source_file_id);
+      setActiveFileId((prev) => prev ?? first?.source_file_id ?? null);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        router.replace("/login");
+        return;
+      }
+      setState({ kind: "error", message: err instanceof Error ? err.message : "加载失败" });
+    }
+  }, [params.id, router]);
+
+  useEffect(() => {
+    if (!getToken()) {
+      router.replace("/login");
+      return;
+    }
+    void load();
+  }, [load, router]);
+
+  async function confirmItem(item: ReviewItem) {
+    setNotice(null);
+    const typed = drafts[item.id];
+    // No edit typed => keep the AI's suggestion; an empty box clears the field.
+    const payload: Record<string, string | null> =
+      typed !== undefined
+        ? { [item.field_name]: typed === "" ? null : typed }
+        : (item.ai_value ?? {});
+    try {
+      if (typed !== undefined) await api.saveReviewValue(item.id, payload);
+      await api.confirmReviewItem(item.id);
+      setNotice(`已确认「${FIELD_LABEL[item.field_name] ?? item.field_name}」。`);
+      await load();
+    } catch (err) {
+      setNotice(err instanceof ApiError ? err.message : "确认失败");
+    }
+  }
+
+  async function discardItem(item: ReviewItem) {
+    try {
+      await api.discardReviewItem(item.id);
+      setNotice("已忽略该建议。");
+      await load();
+    } catch (err) {
+      setNotice(err instanceof ApiError ? err.message : "操作失败");
+    }
+  }
+
+  if (state.kind === "loading") return <div className="empty-state">加载中…</div>;
+  if (state.kind === "error")
+    return (
+      <div className="empty-state" role="alert">
+        <p>{state.message}</p>
+        <button className="btn-ghost mt-3" onClick={() => void load()}>
+          重试
+        </button>
+      </div>
+    );
+
+  const sourceFiles = state.evidence
+    .map((e) => e.source_file_id)
+    .filter((v): v is string => Boolean(v));
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">AI 审核工作台</h1>
+        <button className="btn-ghost" onClick={() => void load()}>
+          刷新
+        </button>
+      </div>
+
+      {notice && (
+        <p className="rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-700" role="status">
+          {notice}
+        </p>
+      )}
+
+      {state.items.length === 0 ? (
+        <div className="empty-state">没有待确认的 AI 建议。</div>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {/* Left: original material */}
+          <section className="card">
+            <h2 className="mb-2 text-sm font-semibold text-slate-600">原始材料</h2>
+            {activeFileId ? (
+              <>
+                <iframe
+                  title="原始材料"
+                  src={api.fileContentUrl(activeFileId)}
+                  className="h-96 w-full rounded border border-slate-200"
+                />
+                <a
+                  className="mt-2 inline-block text-sm text-slate-500 underline"
+                  href={api.fileContentUrl(activeFileId)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  在新标签打开
+                </a>
+              </>
+            ) : (
+              <p className="text-sm text-slate-500">没有可预览的原始材料。</p>
+            )}
+            {sourceFiles.length > 1 && (
+              <select
+                className="input mt-2"
+                value={activeFileId ?? ""}
+                onChange={(e) => setActiveFileId(e.target.value)}
+              >
+                {sourceFiles.map((fid) => (
+                  <option key={fid} value={fid}>
+                    文件 {fid.slice(0, 8)}…
+                  </option>
+                ))}
+              </select>
+            )}
+          </section>
+
+          {/* Right: structured result */}
+          <section className="space-y-3">
+            <h2 className="text-sm font-semibold text-slate-600">AI 结果与人工修改</h2>
+            {state.items.map((item) => {
+              const evidence = state.evidence.find((e) => e.id === item.entity_id);
+              const edited = evidence?.user_edited_fields.includes(item.field_name) ?? false;
+              return (
+                <article key={item.id} className="card">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium">
+                      {FIELD_LABEL[item.field_name] ?? item.field_name}
+                      {evidence ? ` · 证据${evidence.evidence_number}` : ""}
+                    </p>
+                    {item.confidence !== null && item.confidence < 0.8 && (
+                      <span className="rounded bg-red-100 px-2 py-0.5 text-xs text-red-700">
+                        置信度低，请人工确认
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="mt-2 text-sm text-slate-600">
+                    <span className="ai-badge mr-1">AI</span>
+                    {valueText(item.ai_value, item.field_name)}
+                  </p>
+
+                  <label className="mt-2 block text-sm">
+                    <span className="mb-1 block text-slate-500">你的版本</span>
+                    <textarea
+                      className="input"
+                      rows={2}
+                      placeholder={valueText(item.ai_value, item.field_name)}
+                      value={drafts[item.id] ?? ""}
+                      onChange={(e) => setDrafts({ ...drafts, [item.id]: e.target.value })}
+                    />
+                  </label>
+
+                  {edited && (
+                    <p className="mt-1 text-xs text-emerald-700">
+                      这个字段已由你修改，后续 AI 解析不会覆盖。
+                    </p>
+                  )}
+
+                  <div className="mt-2 flex gap-2">
+                    <button className="btn-primary" onClick={() => void confirmItem(item)}>
+                      确认
+                    </button>
+                    <button className="btn-ghost" onClick={() => void discardItem(item)}>
+                      忽略
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </section>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,80 @@
+# Docker Compose for Labor Evidence Organizer.
+#
+# NOTE: Docker is not available in the environment where this project was
+# first developed, so this file is authored to spec (docs/04_TECH_ARCHITECTURE.md
+# and docs/13_DEVELOPMENT_PLAN.md Phase 0) but was never executed there.
+# Native PostgreSQL 15 + uvicorn + next dev were used instead. See README
+# "Verification status" for exactly which checks ran.
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: leo
+      POSTGRES_PASSWORD: leo_dev_pw
+      POSTGRES_DB: labor_evidence
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U leo -d labor_evidence"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://leo:leo_dev_pw@db:5432/labor_evidence
+      STORAGE_BACKEND: local
+      STORAGE_LOCAL_ROOT: /data/storage
+      JOB_BACKEND: rq
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      AI_PROVIDER: ${AI_PROVIDER:-mock}
+      AI_API_KEY: ${AI_API_KEY:-}
+    ports:
+      - "8000:8000"
+    volumes:
+      - storage:/data/storage
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  worker:
+    build: ./backend
+    command: ["rq", "worker", "--url", "redis://redis:6379/0", "analysis"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://leo:leo_dev_pw@db:5432/labor_evidence
+      STORAGE_BACKEND: local
+      STORAGE_LOCAL_ROOT: /data/storage
+      JOB_BACKEND: rq
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      AI_PROVIDER: ${AI_PROVIDER:-mock}
+      AI_API_KEY: ${AI_API_KEY:-}
+    volumes:
+      - storage:/data/storage
+    depends_on:
+      db:
+        condition: service_healthy
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  frontend:
+    build: ./frontend
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000/api/v1
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+  storage:
