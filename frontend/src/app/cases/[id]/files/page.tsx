@@ -117,6 +117,18 @@ export default function CaseFilesPage() {
     }
   }
 
+  async function onPreview(f: CaseFile) {
+    try {
+      const blob = await api.fetchFileContent(f.id);
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noreferrer");
+      // Revoke after the browser has had time to start the download/display.
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      setNotice(err instanceof ApiError ? err.message : "获取原始文件失败");
+    }
+  }
+
   async function onDelete(f: CaseFile) {
     if (!window.confirm(`确定删除「${f.original_filename}」吗？（软删除，原件保留）`)) return;
     try {
@@ -225,14 +237,12 @@ export default function CaseFilesPage() {
                 >
                   {STATUS_LABEL[f.status] ?? f.status}
                 </span>
-                <a
+                <button
                   className="text-sm text-slate-500 underline"
-                  href={api.fileContentUrl(f.id)}
-                  target="_blank"
-                  rel="noreferrer"
+                  onClick={() => void onPreview(f)}
                 >
                   查看原始材料
-                </a>
+                </button>
                 <button className="text-sm text-slate-600 underline" onClick={() => void onRetry(f)}>
                   重试
                 </button>

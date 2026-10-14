@@ -37,6 +37,32 @@ export default function ReviewPage() {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState<string | null>(null);
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  // Fetch the original with the bearer token and swap the iframe src to a
+  // blob URL — a bare <iframe src="/files/..."> cannot carry Authorization.
+  useEffect(() => {
+    if (!activeFileId) {
+      setPreviewUrl(null);
+      return;
+    }
+    let cancelled = false;
+    let url: string | null = null;
+    api
+      .fetchFileContent(activeFileId)
+      .then((blob) => {
+        if (cancelled) return;
+        url = URL.createObjectURL(blob);
+        setPreviewUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) setPreviewUrl(null);
+      });
+    return () => {
+      cancelled = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [activeFileId]);
 
   const load = useCallback(async () => {
     setState({ kind: "loading" });
@@ -132,19 +158,24 @@ export default function ReviewPage() {
             <h2 className="mb-2 text-sm font-semibold text-slate-600">原始材料</h2>
             {activeFileId ? (
               <>
-                <iframe
-                  title="原始材料"
-                  src={api.fileContentUrl(activeFileId)}
-                  className="h-96 w-full rounded border border-slate-200"
-                />
-                <a
+                {previewUrl ? (
+                  <iframe
+                    title="原始材料"
+                    src={previewUrl}
+                    className="h-96 w-full rounded border border-slate-200"
+                  />
+                ) : (
+                  <p className="text-sm text-slate-500">加载预览中…</p>
+                )}
+                <button
                   className="mt-2 inline-block text-sm text-slate-500 underline"
-                  href={api.fileContentUrl(activeFileId)}
-                  target="_blank"
-                  rel="noreferrer"
+                  onClick={() => {
+                    if (previewUrl) window.open(previewUrl, "_blank", "noreferrer");
+                  }}
+                  disabled={!previewUrl}
                 >
                   在新标签打开
-                </a>
+                </button>
               </>
             ) : (
               <p className="text-sm text-slate-500">没有可预览的原始材料。</p>
