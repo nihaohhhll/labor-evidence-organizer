@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import uuid
+
 from tests.helpers import make_txt, upload
 
 
@@ -123,6 +125,36 @@ def test_merge_rejects_single_event(client, auth_headers, case_id):
     ).json()["id"]
     resp = client.post("/api/v1/events/merge", json={"event_ids": [eid]}, headers=auth_headers)
     assert resp.status_code == 422  # pydantic min_length=2
+
+
+def test_merge_is_committed_to_database(client, auth_headers, case_id):
+    """The merge route must commit; the shared test session would otherwise
+    mask a missing commit because it never rolls back between requests."""
+    _confirmed_evidence(client, auth_headers, case_id, count=2)
+    client.post(f"/api/v1/cases/{case_id}/events/build", headers=auth_headers)
+    events = client.get(f"/api/v1/cases/{case_id}/events", headers=auth_headers).json()["events"]
+    ids = [e["id"] for e in events]
+    merged = client.post("/api/v1/events/merge", json={"event_ids": ids}, headers=auth_headers)
+    assert merged.status_code == 200, merged.text
+
+    from sqlalchemy import create_engine, select
+    from sqlalchemy.orm import sessionmaker
+
+    from app.config import get_settings
+    from app.models.event import Event
+
+    engine = create_engine(get_settings().test_database_url, pool_pre_ping=True, future=True)
+    Session = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    db = Session()
+    try:
+        live = list(
+            db.scalars(select(Event).where(Event.case_id == uuid.UUID(case_id)).where(Event.merged_into_id.is_(None))).all()
+        )
+        assert len(live) == 1, f"merge not committed: {len(live)} live events remain"
+        assert str(live[0].id) == merged.json()["id"]
+    finally:
+        db.close()
+        engine.dispose()
 
 
 def test_delete_event(client, auth_headers, case_id):

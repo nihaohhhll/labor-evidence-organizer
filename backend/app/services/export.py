@@ -70,12 +70,50 @@ def export_filename(case_name: str, fmt: str) -> str:
     return f"证据包-{_safe_filename(case_name)}.{fmt}"
 
 
-def _page_footer(canvas, doc):
-    """Render 第 X 页 / 共 Y 页 on every page."""
-    canvas.saveState()
-    canvas.setFont(CJK_FONT, 9)
-    canvas.drawCentredString(A4[0] / 2, 10 * mm, f"第 {canvas.getPageNumber()} 页 / 共 {doc.page} 页")
-    canvas.restoreState()
+def _page_footer(total_pages: int):
+    """Render 第 X 页 / 共 Y 页 on every page.
+
+    `Y` is the true document total, obtained by a probe build (see
+    `_build_pdf`): ReportLab's `doc.page` during the build is only the
+    *current* page number, which used to make every footer claim 共 N 页
+    with N equal to the page being drawn.
+    """
+
+    def _draw(canvas, doc):
+        canvas.saveState()
+        canvas.setFont(CJK_FONT, 9)
+        canvas.drawCentredString(
+            A4[0] / 2, 10 * mm, f"第 {canvas.getPageNumber()} 页 / 共 {total_pages} 页"
+        )
+        canvas.restoreState()
+
+    return _draw
+
+
+def _build_pdf(story_factory) -> bytes:
+    """Build a PDF in two passes so footers can print the real total.
+
+    Pass 1 renders into a throwaway buffer to count pages; pass 2 renders the
+    final document with that count. The footer is drawn inside the bottom
+    margin and consumes no flowable space, so both passes paginate
+    identically.
+    """
+    margins = dict(
+        pagesize=A4,
+        leftMargin=16 * mm,
+        rightMargin=16 * mm,
+        topMargin=16 * mm,
+        bottomMargin=18 * mm,
+    )
+    probe = SimpleDocTemplate(io.BytesIO(), **margins)
+    probe.build(story_factory())
+    total_pages = probe.page
+
+    buf = io.BytesIO()
+    footer = _page_footer(total_pages)
+    doc = SimpleDocTemplate(buf, **margins)
+    doc.build(story_factory(), onFirstPage=footer, onLaterPages=footer)
+    return buf.getvalue()
 
 
 def _ensure_cjk_font() -> None:
@@ -165,48 +203,43 @@ def render_docx(data: ExportData) -> bytes:
 def render_pdf(data: ExportData) -> bytes:
     """Render the same content to PDF with page numbers."""
     _ensure_cjk_font()
-    buf = io.BytesIO()
-    story = []
 
-    story.append(Paragraph(f"证据目录 — {data.case.name}", _heading_style(16)))
-    story.append(Spacer(1, 4 * mm))
-    story.append(
-        Paragraph(
-            f"生成时间：{data.generated_at.strftime('%Y-%m-%d %H:%M:%S UTC')}", _heading_style(9)
+    def story_factory() -> list:
+        story = []
+
+        story.append(Paragraph(f"证据目录 — {data.case.name}", _heading_style(16)))
+        story.append(Spacer(1, 4 * mm))
+        story.append(
+            Paragraph(
+                f"生成时间：{data.generated_at.strftime('%Y-%m-%d %H:%M:%S UTC')}",
+                _heading_style(9),
+            )
         )
-    )
-    story.append(Paragraph(DISCLAIMER, _heading_style(9)))
-    story.append(Spacer(1, 6 * mm))
+        story.append(Paragraph(DISCLAIMER, _heading_style(9)))
+        story.append(Spacer(1, 6 * mm))
 
-    index_rows = [
-        [Paragraph(str(c), _heading_style(9)) for c in row] for row in _rows(data.evidence)
-    ]
-    index = Table(index_rows, colWidths=[18 * mm, 55 * mm, 28 * mm, 65 * mm], repeatRows=1)
-    index.setStyle(_table_style())
-    story.append(index)
-
-    if data.events:
-        story.append(PageBreak())
-        story.append(Paragraph("案件时间轴", _heading_style(14)))
-        story.append(Spacer(1, 5 * mm))
-        tl_rows = [
-            [Paragraph(str(c), _heading_style(9)) for c in row]
-            for row in _timeline_rows(data.events)
+        index_rows = [
+            [Paragraph(str(c), _heading_style(9)) for c in row] for row in _rows(data.evidence)
         ]
-        tl = Table(tl_rows, colWidths=[28 * mm, 92 * mm, 46 * mm], repeatRows=1)
-        tl.setStyle(_table_style())
-        story.append(tl)
+        index = Table(index_rows, colWidths=[18 * mm, 55 * mm, 28 * mm, 65 * mm], repeatRows=1)
+        index.setStyle(_table_style())
+        story.append(index)
 
-    doc = SimpleDocTemplate(
-        buf,
-        pagesize=A4,
-        leftMargin=16 * mm,
-        rightMargin=16 * mm,
-        topMargin=16 * mm,
-        bottomMargin=18 * mm,
-    )
-    doc.build(story, onFirstPage=_page_footer, onLaterPages=_page_footer)
-    return buf.getvalue()
+        if data.events:
+            story.append(PageBreak())
+            story.append(Paragraph("案件时间轴", _heading_style(14)))
+            story.append(Spacer(1, 5 * mm))
+            tl_rows = [
+                [Paragraph(str(c), _heading_style(9)) for c in row]
+                for row in _timeline_rows(data.events)
+            ]
+            tl = Table(tl_rows, colWidths=[28 * mm, 92 * mm, 46 * mm], repeatRows=1)
+            tl.setStyle(_table_style())
+            story.append(tl)
+
+        return story
+
+    return _build_pdf(story_factory)
 
 
 def _heading_style(size: int):
@@ -705,73 +738,71 @@ def _image_flowable(image: bytes, max_w: float, max_h: float):
 
 def render_package_pdf(data: PackageExportData) -> bytes:
     _ensure_cjk_font()
-    buf = io.BytesIO()
-    story: list = []
     body = _body_style()
     max_w, max_h = 170 * mm, 200 * mm
 
-    story.append(Paragraph(f"材料包：{_escape(data.package.name)}", _heading_style(16)))
-    story.append(Spacer(1, 3 * mm))
-    story.append(Paragraph(f"案件：{_escape(data.case.name)}", body))
-    story.append(
-        Paragraph(f"生成时间：{data.generated_at.strftime('%Y-%m-%d %H:%M:%S UTC')}", body)
-    )
-    story.append(Paragraph(DISCLAIMER, body))
-    story.append(Spacer(1, 5 * mm))
+    def story_factory() -> list:
+        story: list = []
 
-    index_rows = [
-        [Paragraph(_escape(str(c)), _heading_style(9)) for c in row]
-        for row in _package_index_rows(data.rows)
-    ]
-    index = Table(index_rows, colWidths=[20 * mm, 50 * mm, 70 * mm, 28 * mm], repeatRows=1)
-    index.setStyle(_table_style())
-    story.append(index)
-
-    for row in data.rows:
-        story.append(PageBreak())
-        story.append(
-            Paragraph(_escape(f"材料{row.display_number}：{row.display_name}"), _heading_style(13))
-        )
+        story.append(Paragraph(f"材料包：{_escape(data.package.name)}", _heading_style(16)))
         story.append(Spacer(1, 3 * mm))
-        story.append(Paragraph(_escape(f"拟证明事项：{row.proof_purpose or '（未填写）'}"), body))
-        story.append(Paragraph("原始内容：", body))
-        block = data.contents.get(row.evidence_id) or ContentBlock(notes=["未取得原始内容。"])
-        for note in block.notes:
-            story.append(Paragraph(_escape(note), _note_style()))
-            story.append(Spacer(1, 2 * mm))
-        for part in block.parts:
-            if part.kind == "text":
-                # Split into paragraphs so long runs do not become one line block.
-                for para in part.text.split("\n"):
-                    if para.strip():
-                        story.append(Paragraph(_escape(para), body))
-            elif part.kind == "image" and part.image:
-                try:
-                    story.append(_image_flowable(part.image, max_w, max_h))
-                    story.append(Spacer(1, 3 * mm))
-                except Exception as exc:
-                    story.append(
-                        Paragraph(_escape(f"【图片嵌入失败：{exc}，请查阅原始文件。】"), _note_style())
-                    )
+        story.append(Paragraph(f"案件：{_escape(data.case.name)}", body))
+        story.append(
+            Paragraph(f"生成时间：{data.generated_at.strftime('%Y-%m-%d %H:%M:%S UTC')}", body)
+        )
+        story.append(Paragraph(DISCLAIMER, body))
+        story.append(Spacer(1, 5 * mm))
 
-    if data.appendix is not None:
-        story.append(PageBreak())
-        story.append(Paragraph(GAP_APPENDIX_TITLE, _heading_style(14)))
-        story.append(Spacer(1, 4 * mm))
-        for line in _appendix_lines(data.appendix):
-            story.append(Paragraph(_escape(line), body))
-            story.append(Spacer(1, 2 * mm))
+        index_rows = [
+            [Paragraph(_escape(str(c)), _heading_style(9)) for c in row]
+            for row in _package_index_rows(data.rows)
+        ]
+        index = Table(index_rows, colWidths=[20 * mm, 50 * mm, 70 * mm, 28 * mm], repeatRows=1)
+        index.setStyle(_table_style())
+        story.append(index)
 
-    doc = SimpleDocTemplate(
-        buf,
-        pagesize=A4,
-        leftMargin=16 * mm,
-        rightMargin=16 * mm,
-        topMargin=16 * mm,
-        bottomMargin=18 * mm,
-    )
-    doc.build(story, onFirstPage=_page_footer, onLaterPages=_page_footer)
-    return buf.getvalue()
+        for row in data.rows:
+            story.append(PageBreak())
+            story.append(
+                Paragraph(
+                    _escape(f"材料{row.display_number}：{row.display_name}"), _heading_style(13)
+                )
+            )
+            story.append(Spacer(1, 3 * mm))
+            story.append(Paragraph(_escape(f"拟证明事项：{row.proof_purpose or '（未填写）'}"), body))
+            story.append(Paragraph("原始内容：", body))
+            block = data.contents.get(row.evidence_id) or ContentBlock(notes=["未取得原始内容。"])
+            for note in block.notes:
+                story.append(Paragraph(_escape(note), _note_style()))
+                story.append(Spacer(1, 2 * mm))
+            for part in block.parts:
+                if part.kind == "text":
+                    # Split into paragraphs so long runs do not become one line block.
+                    for para in part.text.split("\n"):
+                        if para.strip():
+                            story.append(Paragraph(_escape(para), body))
+                elif part.kind == "image" and part.image:
+                    try:
+                        story.append(_image_flowable(part.image, max_w, max_h))
+                        story.append(Spacer(1, 3 * mm))
+                    except Exception as exc:
+                        story.append(
+                            Paragraph(
+                                _escape(f"【图片嵌入失败：{exc}，请查阅原始文件。】"), _note_style()
+                            )
+                        )
+
+        if data.appendix is not None:
+            story.append(PageBreak())
+            story.append(Paragraph(GAP_APPENDIX_TITLE, _heading_style(14)))
+            story.append(Spacer(1, 4 * mm))
+            for line in _appendix_lines(data.appendix):
+                story.append(Paragraph(_escape(line), body))
+                story.append(Spacer(1, 2 * mm))
+
+        return story
+
+    return _build_pdf(story_factory)
 
 
 def _escape(text: str) -> str:

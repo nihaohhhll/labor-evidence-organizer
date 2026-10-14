@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ApiError, api, getToken } from "@/lib/api";
+import { buildMergeConfirmMessage } from "@/lib/timeline-ui";
 import type { TimelineEvent } from "@/lib/types";
 
 type ViewState =
@@ -98,7 +99,10 @@ export default function TimelinePage() {
   }
 
   async function merge() {
-    if (selected.length < 2) return;
+    if (selected.length < 2 || state.kind !== "ready") return;
+    const chosen = state.events.filter((ev) => selected.includes(ev.id));
+    if (chosen.length < 2) return;
+    if (!window.confirm(buildMergeConfirmMessage(chosen))) return;
     setNotice(null);
     try {
       await api.mergeEvents(selected);

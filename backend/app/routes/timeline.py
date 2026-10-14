@@ -102,6 +102,8 @@ def merge(
         survivor = merge_events(db, user.id, body.event_ids, body.title)
     except ValueError as exc:
         raise HTTPException(409, detail={"code": "MERGE_FAILED", "message": str(exc)})
+    db.commit()
+    db.refresh(survivor)
     return EventDetailOut.model_validate(survivor)
 
 

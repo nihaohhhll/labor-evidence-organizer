@@ -1,0 +1,9 @@
+# Frontend build context exclusions.
+node_modules/
+.next/
+out/
+test-results/
+e2e/
+.env
+.env.*
+*.md

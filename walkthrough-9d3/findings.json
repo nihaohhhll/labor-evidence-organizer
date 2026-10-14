@@ -1,0 +1,232 @@
+[
+  {
+    "level": "PASS",
+    "task": "T1",
+    "msg": "登录页含密码框，无需文档可见表单"
+  },
+  {
+    "level": "PASS",
+    "task": "T1",
+    "msg": "案件列表空态有引导文案「还没有案件…」"
+  },
+  {
+    "level": "PASS",
+    "task": "T1",
+    "msg": "UI 建案件成功并进入案件页 case=436ed4f3-3825-45c0-ad9c-eab29ce48b41"
+  },
+  {
+    "level": "PASS",
+    "task": "T2",
+    "msg": "列表实际出现状态词：已完成、失败"
+  },
+  {
+    "level": "PASS",
+    "task": "T2",
+    "msg": "损坏文件的终态「失败」在列表中可见"
+  },
+  {
+    "level": "PASS",
+    "task": "T2",
+    "msg": "失败行出现「重试」按钮（3 个）"
+  },
+  {
+    "level": "PASS",
+    "task": "T3",
+    "msg": "人工修订后的字段旁出现「已由你修改…不会覆盖」提示"
+  },
+  {
+    "level": "PASS",
+    "task": "T3",
+    "msg": "高置信样本不显示低置信提示（符合预期），低置信行为由 T3b 专项验证"
+  },
+  {
+    "level": "PASS",
+    "task": "T3b",
+    "msg": "无信号文本上传成功"
+  },
+  {
+    "level": "PASS",
+    "task": "T3b",
+    "msg": "低置信样本解析成功"
+  },
+  {
+    "level": "PASS",
+    "task": "T3b",
+    "msg": "低置信字段在审核台显示「置信度低，请人工确认」"
+  },
+  {
+    "level": "PASS",
+    "task": "T4",
+    "msg": "同页可见「待确认」「已确认」双态徽标"
+  },
+  {
+    "level": "PASS",
+    "task": "T4",
+    "msg": "人工修订过的证据带「已人工修改」徽标"
+  },
+  {
+    "level": "PASS",
+    "task": "T4",
+    "msg": "编辑态可见「证明目的」标签，可直接修改拟证明事项"
+  },
+  {
+    "level": "PASS",
+    "task": "T4",
+    "msg": "本案证据均已填写证明目的（正常态），空值行为由 T4b 专项验证"
+  },
+  {
+    "level": "PASS",
+    "task": "T4b",
+    "msg": "空证明目的在非编辑态显示中性提示「尚未填写拟证明事项，可编辑补充」"
+  },
+  {
+    "level": "PASS",
+    "task": "T4b",
+    "msg": "编辑态证明目的输入框有占位提示"
+  },
+  {
+    "level": "PASS",
+    "task": "T4b",
+    "msg": "已有证明目的内容时原样显示，无空值提示"
+  },
+  {
+    "level": "PASS",
+    "task": "T5",
+    "msg": "合并有确认提示：「确定合并这 2 个事件吗？」…（含受影响事件与不可撤销说明）"
+  },
+  {
+    "level": "PASS",
+    "task": "T5",
+    "msg": "确认文案列出了受影响事件并写明不可撤销"
+  },
+  {
+    "level": "PASS",
+    "task": "T5",
+    "msg": "取消合并后事件集合未变（无请求发出、数据不变）"
+  },
+  {
+    "level": "PASS",
+    "task": "T5",
+    "msg": "确认合并后事件数 2→1，合并真正执行"
+  },
+  {
+    "level": "PASS",
+    "task": "T6",
+    "msg": "空态有引导且指向「新建材料包」"
+  },
+  {
+    "level": "PASS",
+    "task": "T6",
+    "msg": "编辑页可见「草稿」状态字样"
+  },
+  {
+    "level": "PASS",
+    "task": "T6",
+    "msg": "编辑页可见「快照」相关字样"
+  },
+  {
+    "level": "PASS",
+    "task": "T6",
+    "msg": "编辑页有「发布」按钮"
+  },
+  {
+    "level": "PASS",
+    "task": "T6",
+    "msg": "头部同时展示草稿版本号与历史快照数（草稿/快照可区分）"
+  },
+  {
+    "level": "PASS",
+    "task": "T6",
+    "msg": "发布确认框写明「发布只是状态标记…仍可继续编辑」：「发布该材料包？发布只是状态标记，发布后仍可继续编辑条目。」"
+  },
+  {
+    "level": "PASS",
+    "task": "T6",
+    "msg": "发布后提示「发布只是状态标记，仍可继续编辑条目」"
+  },
+  {
+    "level": "PASS",
+    "task": "T6",
+    "msg": "头部状态切换为「已发布」且仍显示草稿版本（发布≠冻结）"
+  },
+  {
+    "level": "PASS",
+    "task": "T6",
+    "msg": "发布后「保存草稿」按钮仍在（未进入只读态，只有归档才锁定）"
+  },
+  {
+    "level": "PASS",
+    "task": "T7",
+    "msg": "无快照时导出页给出明确下一步指引（先保存草稿并创建快照）"
+  },
+  {
+    "level": "PASS",
+    "task": "T7",
+    "msg": "解释了快照与导出内容不可变的关系"
+  },
+  {
+    "level": "PASS",
+    "task": "T7",
+    "msg": "保存材料包条目成功（draft_version=2）"
+  },
+  {
+    "level": "PASS",
+    "task": "T7",
+    "msg": "创建快照成功（v1）"
+  },
+  {
+    "level": "PASS",
+    "task": "T7",
+    "msg": "有快照后出现「快照版本」选择器且不再提示「尚无快照」"
+  },
+  {
+    "level": "PASS",
+    "task": "T7",
+    "msg": "UI 触发 PDF 卷宗生成成功，导出记录中出现可下载任务"
+  },
+  {
+    "level": "PASS",
+    "task": "T7",
+    "msg": "PDF 下载成功（5624 字节）→ /root/labor-evidence-organizer/walkthrough-9d3/t7-材料包卷宗.pdf"
+  },
+  {
+    "level": "PASS",
+    "task": "T7",
+    "msg": "PDF 含「拟证明事项」小节"
+  },
+  {
+    "level": "PASS",
+    "task": "T7",
+    "msg": "PDF 含材料编号（材料N：）"
+  },
+  {
+    "level": "PASS",
+    "task": "T7",
+    "msg": "PDF 中文可正常抽取（非乱码）"
+  },
+  {
+    "level": "PASS",
+    "task": "T7",
+    "msg": "PDF 正文与最终确认的拟证明事项一致（回溯到人工修订值）"
+  },
+  {
+    "level": "MANUAL",
+    "task": "T7",
+    "msg": "卷宗排版观感（字体/分页/表格布局）需人工看 t7-材料包卷宗.pdf，本项只做文本层校验"
+  },
+  {
+    "level": "PASS",
+    "task": "T8",
+    "msg": "全局免责声明在页面可见（layout 层）"
+  },
+  {
+    "level": "PASS",
+    "task": "T8",
+    "msg": "上传拒绝的具体原因（「文件内容与扩展名不一致」）直接展示给用户"
+  },
+  {
+    "level": "MANUAL",
+    "task": "T8",
+    "msg": "409 VERSION_CONFLICT / SNAPSHOT_REQUIRED 的 UI 展示：frontend/e2e/phase9c-ui.spec.ts:244-249 断言 error.code=SNAPSHOT_REQUIRED（9-C 用例，本走查不重复触发，需另跑 playwright test 复核）"
+  }
+]

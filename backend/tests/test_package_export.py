@@ -178,6 +178,47 @@ def test_pdf_export_completes_with_snapshot_binding(client, auth_headers, case_i
     assert "CONFIRMED" not in text
 
 
+def test_pdf_footer_shows_true_total_page_count(client, auth_headers, case_id):
+    """Regression: every footer must read 共 <total> 页, not the current page.
+
+    A 2-item package renders as index page + one page per material = 3 pages.
+    The old footer used ReportLab's `doc.page`, which during the build is only
+    the *current* page number, so each page claimed 共 1 页 / 共 2 页 / 共 3 页.
+    """
+    pkg = _mk_package(client, auth_headers, case_id, name="页码卷")
+    ev1 = _mk_evidence(client, auth_headers, case_id, title="工资条", proof="用于证明工资数额。")
+    ev2 = _mk_evidence(client, auth_headers, case_id, title="考勤表", proof="用于证明出勤情况。")
+    saved = _save(
+        client,
+        auth_headers,
+        pkg["id"],
+        pkg["draft_version"],
+        [{"evidence_id": ev1}, {"evidence_id": ev2}],
+    )
+    assert saved.status_code == 200, saved.text
+    snap = _snapshot(client, auth_headers, pkg["id"], saved.json()["draft_version"])
+    assert snap.status_code == 201, snap.text
+
+    resp = _create_export(client, auth_headers, pkg["id"], format="pdf")
+    assert resp.status_code == 201, resp.text
+    dl = client.get(f"/api/v1/exports/{resp.json()['id']}/download", headers=auth_headers)
+    assert dl.status_code == 200
+
+    import pymupdf
+
+    with pymupdf.open(stream=dl.content, filetype="pdf") as pdf:
+        assert pdf.page_count == 3, f"expected a 3-page volume, got {pdf.page_count}"
+        page_texts = [page.get_text("text") for page in pdf]
+
+    # Every page shows the real total…
+    for i, text in enumerate(page_texts, start=1):
+        assert "共 3 页" in text, f"page {i} footer missing 共 3 页: {text[-80:]!r}"
+    # …and the correct current page.
+    assert "第 1 页 / 共 3 页" in page_texts[0]
+    assert "第 2 页 / 共 3 页" in page_texts[1]
+    assert "第 3 页 / 共 3 页" in page_texts[2]
+
+
 def test_docx_export_embeds_original_content_and_index(client, auth_headers, case_id):
     pkg, _ = _file_backed_package(client, auth_headers, case_id, name="考勤卷")
     resp = _create_export(client, auth_headers, pkg["id"], format="docx")

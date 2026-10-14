@@ -134,7 +134,7 @@ analysis 可以生成可编辑证据。
 验收：后端 250 测试、Playwright 11/11、`e2e-smoke.sh`、
 `e2e-material-packages.sh` 14/14、`alembic check` 全部通过。
 
-### Phase 9-D — 真实材料端到端验证（9-D-1/9-D-2 已完成，9-D-3/9-D-4/9-D-5 进行中）
+### Phase 9-D — 真实材料端到端验证（全部完成并封版：9-D-1 / 9-D-2 / 9-D-3a/3b/3c / 9-D-4 / 9-D-5 / 9-D-5.1 复核）
 设计：`docs/16_PHASE_9D_DESIGN.md`（含风险登记册 R1-R12 与阶段划分）。
 
 #### 9-D-1 脱敏材料套件（已完成）
@@ -162,14 +162,50 @@ analysis 可以生成可编辑证据。
 - 修正：脚本初版错误信封断言误用 FastAPI 默认 `detail.code`，与本项目全局
   `error.code` 信封不符，已按兄弟脚本惯例改为对 BODY 子串断言。
 
-#### 9-D-3 人工走查（待执行）
-按 `docs/16` §4 的 T1-T8 清单逐条记录通过/问题，只报有依据问题。
+#### 9-D-3a/9-D-3b 修复与补齐人工验证（已完成）
+- 9-D-3a 修复走查两个问题（见 `docs/17` §8）：
+  - P2 合并确认：新增 `timeline-ui.ts` 纯函数 + `timeline/page.tsx` `window.confirm`
+    （列出受影响事件、写明不可撤销；取消不发请求）。
+  - P3 空证明目的提示：`evidence/page.tsx` 非编辑态中性提示 + 编辑态 placeholder。
+  - 顺带修复后端缺陷：merge 端点从未 `db.commit()`（生产 `get_db.close()` 会回滚），
+    补 commit + 独立 session 回归测试。
+- 9-D-3b 补齐人工验证（见 `docs/17` §9）：
+  - PDF 逐页视觉检查：中文字体/表格/分页正文正常；发现页脚「共 N 页」总数错误
+    （已在 9-D-3c 修复）。
+  - 浏览器实测 409 VERSION_CONFLICT（双标签页并发保存）：API 409 + UI 提示 +
+    重新加载按钮 + draft_version 未被推进，已闭环。
+- 回归：pytest **271 passed**、lint/tsc/vitest 23、Playwright 12、三个 e2e 脚本、
+  `alembic check` 全绿；走查重跑 **PASS=44 / ISSUE=0 / MANUAL=2**。
 
-#### 9-D-4 部署风险处置（待批）
-R1 两个 Dockerfile + R4 备份/恢复脚本，需用户批准后实施。
+#### 9-D-3c 修复 PDF 页脚总页数错误（已完成）
+- 根因：`export.py` `_page_footer` 用 `doc.page`（build 期间=当前页码）当总页数。
+- 修复：`_page_footer` 改为工厂 + 新增 `_build_pdf(story_factory)` 两遍构建
+  （第一遍数页数、第二遍写真实总数），`render_pdf`/`render_package_pdf` 均改用；
+  导出内容结构不变、不换框架，DOCX 不受影响。
+- 测试：新增材料包 3 页页脚全量断言；强化案件导出逐页「第 X 页 / 共 Y 页」断言。
+- 回归（用户指定清单）：pytest **272 passed**、tsc/lint 0、vitest 23、Playwright 12、
+  `e2e-smoke.sh`、`e2e-material-packages.sh`、`alembic check` 全绿。
+  详见 `docs/17` §12。
 
-#### 9-D-5 汇总（待执行）
-9-D 报告（材料验证矩阵/可用性问题清单/风险登记册含未验证标注）。
+#### 9-D-4 部署风险处置（已完成）
+- R1：补写 `backend/Dockerfile`、`frontend/Dockerfile`（+`.dockerignore`）；compose 静态评审
+  修复 frontend 缺 build.args；确认 R6（rq worker 缺依赖）仅登记不修。
+- R4：新增 `scripts/backup.sh`/`restore.sh`；本机真实演练通过（marker 注入→备份→删除→
+  恢复→行数与字节级核对）。
+- 详见 `docs/17` §13。
+
+#### 9-D-5 汇总（已完成）
+- 全量回归一遍收尾：pytest 272 passed、tsc/lint 0、vitest 23、Playwright 12、
+  三个 e2e 脚本、走查 PASS=44、alembic check 无漂移、**`npm run build` 首次实跑通过**。
+- 汇总报告：`docs/18_PHASE_9D_FINAL_REPORT.md`（材料验证矩阵 M1-M12、可用性问题
+  U1-U8、风险登记册 R1-R13 含未验证标注、试用决策建议）。
+- 详见 `docs/18`。
+
+#### 9-D-5.1 收尾复核与封版（已完成）
+- P3 页脚总页数缺陷已在 9-D-3c 修复；本次零新改动，仅复核：export 回归 32 passed、
+  实时 HTTP 生成 4 页卷宗逐页页脚断言 + 渲染图人工看图通过。
+- **Phase 9-D 最终封版记录**：`docs/18` §8。保持待办：Docker/S3/RQ/真实 AI Provider
+  /HTTPS/R3（待批）/Git 提交/Phase 10。
 
 ## AI Agent 工作规则
 

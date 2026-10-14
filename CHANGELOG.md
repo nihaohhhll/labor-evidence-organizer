@@ -118,4 +118,68 @@
 - 后端修复：`routes/analysis.py` analyze 端点把 `FileServiceError` 转 409 错误信封（此前 FAILED 文件直接解析返回 500）。
 - 脚本修正：错误信封断言初版误用 FastAPI 默认 `detail.code`，与本项目全局 `error.code` 信封不符，改为对 BODY 子串断言（与 `e2e-material-packages.sh` 惯例一致）。
 - 回归：`e2e-real-materials.sh` 全部通过、后端 **pytest 270 passed**、`e2e-smoke.sh` 全流程通过。
-- 未做（按 9-D 边界）：9-D-3 人工走查、9-D-4 部署风险处置（Dockerfile/备份脚本，待批）、9-D-5 汇总报告、Git 提交。
+- 未做（按 9-D 边界）：9-D-4 部署风险处置（Dockerfile/备份脚本，待批）、9-D-5 汇总报告、Git 提交。
+
+### Phase 9-D-3 — 人工走查 T1-T8（已完成）
+- 走查驱动 `frontend/walkthrough-9d3.mjs`：真实浏览器过 T1-T8（含 T3b 低置信样本、T4b 空证明目的两个专项补测），产出 `walkthrough-9d3/`（20 张截图 + `findings.json` + 真实导出的 `t7-材料包卷宗.pdf`），最终 **PASS=44 / ISSUE=0 / MANUAL=2**；记录见 `docs/17_PHASE_9D3_WALKTHROUGH.md`。
+- 导出内容实测：UI 生成 PDF 卷宗 → 鉴权下载 → 文本抽取校验含材料编号、「拟证明事项」、中文非乱码、正文与人工修订值一致；**逐页视觉检查**（PyMuPDF 渲染看图）确认中文字体/表格/分页正文正常。
+- 9-D-3a 修复走查问题：
+  - P2 合并确认：新增 `frontend/src/lib/timeline-ui.ts`（`buildMergeConfirmMessage`，列出受影响事件+不可撤销说明）+ `timeline/page.tsx` 在发请求前 `window.confirm`，取消不发请求；单测覆盖。
+  - P3 空证明目的提示：`evidence/page.tsx` 非编辑态中性提示 + 编辑态 placeholder，有值时原样显示。
+  - 顺带修复后端缺陷：merge 端点从未 `db.commit()`（生产 `get_db.close()` 回滚，单测因共享 session 假通过），已补 commit + 独立 session 回归测试。
+- 9-D-3b 补齐人工验证：浏览器双标签页实测 409 `VERSION_CONFLICT`（API 409 + UI 提示 + 重新加载按钮 + draft_version 未推进），闭环此前「未验证」项。
+- 依赖修复：`backend/requirements.txt` 补 `email-validator>=2.0`（`schemas.py` 用 `EmailStr`，缺失时 README 快速开始装完依赖 `import app.main` 即失败）；新建干净 venv 全新安装后 `import app.main` 通过。
+- 回归：`pytest` **271 passed**、`npm run lint`/`typecheck`/`vitest`（23）、`npx playwright test` 12 passed、`e2e-real-materials.sh`、`e2e-smoke.sh`、`e2e-material-packages.sh`、`alembic check` 全绿。
+- 新发现待决：PDF 页脚「共 N 页」总数错误（已在 9-D-3c 修复）。
+
+### Phase 9-D-3c — 修复 PDF 页脚总页数错误（已完成）
+- 根因：`services/export.py` `_page_footer` 用 ReportLab `doc.page`（build 期间=当前页码）当总页数，3 页文档每页分别显示「共 1/2/3 页」。
+- 修复：`_page_footer` 改为 `total_pages` 工厂；新增 `_build_pdf(story_factory)` 两遍构建（第一遍渲临时 buffer 数页数，第二遍写真实总数；footer 画在页边距内不占 flowable 空间，两遍分页一致）；`render_pdf`/`render_package_pdf` 均改用。导出内容结构不变、不换框架；DOCX 无页码 footer 不受影响。
+- 测试：新增 `test_pdf_footer_shows_true_total_page_count`（2 材料→恰好 3 页：每页「共 3 页」、第 1/2/3 页各自「第 N 页 / 共 3 页」）；强化案件导出逐页 `第 {i} 页 / 共 {total} 页` 断言。
+- 回归（用户指定清单全绿）：`pytest` **272 passed**、`tsc`/`lint` 0、`vitest` 23、Playwright 12、`e2e-smoke.sh`、`e2e-material-packages.sh`、`alembic check`。
+- 未做（按 9-D 边界）：9-D-4（进行中）、9-D-5 汇总报告、`next build`（留到停服后）、Git 提交。
+
+## [9-D-4] 2026-10-14 — 部署风险处置
+
+### Added
+- `backend/Dockerfile`：python:3.11-slim + libmagic1 + 非 root + alembic upgrade head + uvicorn + HEALTHCHECK(/healthz)。
+- `frontend/Dockerfile`：node:20-alpine 多阶段 npm ci → next build → next start；`NEXT_PUBLIC_API_BASE_URL` 为 build arg（Next 构建期内联）。
+- `backend/.dockerignore`、`frontend/.dockerignore`。
+- `scripts/backup.sh`：pg_dump(custom) + tar storage + manifest（含 cases/evidence 行数）。
+- `scripts/restore.sh`：pg_restore --clean --if-exists + 解包 storage + 自动行数核对。
+
+### Changed
+- `docker-compose.yml`：frontend 增加 `build.args.NEXT_PUBLIC_API_BASE_URL`（原仅 runtime environment 无效）。
+- 风险登记册（docs/16）：R1/R2/R4 状态更新。
+
+### Notes
+- 本环境无 Docker：Dockerfile/compose 仅静态评审，镜像构建与 compose up 实跑**未验证**。
+- R6 确认未修：compose worker 命令引用 `rq`，但 rq/redis 不在 requirements、代码零引用。
+- 备份/恢复已在本机真实演练通过（marker 注入→删除→恢复→字节级核对）。
+
+## [9-D-5] 2026-10-14 — Phase 9-D 汇总（完结）
+
+### Added
+- `docs/18_PHASE_9D_FINAL_REPORT.md`：9-D 汇总报告——材料验证结果矩阵（M1-M12 逐份
+  预期 vs 实际，全通过；M3 聊天分类置信度按实际 0.96 固化）、可用性问题清单
+  U1-U8（U1 合并确认/U2 空证明目的提示/U3 冲突 UI 已修，其余记录）、风险登记册
+  R1-R13 现状（R1/R2/R4 已处置或已演练并标注"容器实跑未验证"；R3/R5/R6/R8-R12
+  待批或仅记录）、试用决策建议（单机+内网+先备份+明示 U4/U7）。
+
+### Changed
+- 全量回归收尾全绿：pytest 272、tsc/lint 0、vitest 23、Playwright 12、三个 e2e
+  脚本、走查 PASS=44、alembic check 无漂移；`npm run build` 首次实跑通过（17 路由）。
+- README/CHANGELOG/docs/13 与 9-D 报告同步。
+
+### Notes
+- **Phase 9-D 完结**。未做（明确出界）：Phase 10、Git 提交、R3/R5/R6/R8-R12 代码级
+  处置（待批）、真实 AI/OCR/S3/HTTPS/多副本。
+
+## [9-D-5.1] 2026-10-14 — P3 页脚复核与 Phase 9-D 封版
+
+### Notes
+- P3 页脚总页数缺陷已在 9-D-3c 修复；本次收尾**零新代码改动**，仅复核确认。
+- 复核：export 回归 **32 passed**；实时 HTTP 生成 4 页卷宗逐页「第 N 页 / 共 4 页」
+  文本断言 + 渲染图人工看图通过（`/tmp/leo-pdf-visual/`）。
+- **Phase 9-D 最终封版**（`docs/18` §8）。保持待办：Docker 实跑 / S3 / RQ worker /
+  真实 AI Provider / HTTPS / R3 生产守卫（待批）/ Git 提交 / Phase 10。

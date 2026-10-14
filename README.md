@@ -117,24 +117,33 @@ Base URL `/api/v1`，共 **55 个端点**。错误响应统一为：
 
 | 检查 | 结果 |
 | --- | --- |
-| `backend: pytest -q` | **270 passed**（0 failed，含材料包成卷导出 18 例、下载文件名头 13 例、A3 缺口分析 30 例） |
-| `frontend: vitest run` | **22 passed**（含下载文件名解析 5 例；`vitest.config.ts` 限定只收 `src/**`） |
+| `backend: pytest -q` | **272 passed**（0 failed，含材料包成卷导出 19 例、下载文件名头 13 例、A3 缺口分析 30 例、时间轴合并 commit 回归 1 例、PDF 页脚总页数回归 1 例） |
+| `frontend: vitest run` | **23 passed**（含下载文件名解析 5 例、时间轴合并确认 1 例；`vitest.config.ts` 限定只收 `src/**`） |
 | `frontend: tsc --noEmit` | 通过（strict，含 `noUncheckedIndexedAccess`） |
 | `frontend: eslint` | 通过（`src` + `e2e`，0 warning） |
-| `frontend: next build` | 通过，17 个路由 |
+| `frontend: next build` | 通过（9-D-5 首次实跑：17 个路由全部构建，首屏共享 JS 87.2 kB；构建后重启 dev server 复核走查仍 PASS） |
 | `alembic upgrade head → downgrade base → upgrade head` + `alembic check` | 往返通过，无 schema 漂移 |
 | `scripts/e2e-smoke.sh` | 通过（真实 HTTP + 真实 PostgreSQL，含 A3 材料缺口步骤） |
 | `scripts/e2e-material-packages.sh` | 通过（14 步全部真实执行，前后端同时运行时无跳过） |
 | `scripts/e2e-ui.sh`（Playwright） | 通过（材料包 12 场景，含下载文件名兼容场景） |
 | `scripts/e2e-real-materials.sh` | 通过（9-D 真实脱敏材料 M1-M12 矩阵 + M1 七跳可追溯链 + M8 状态机闭环 + mock OCR 空文本固化） |
+| `node frontend/walkthrough-9d3.mjs` | 通过（9-D-3 人工走查 T1-T8：**PASS=44 / ISSUE=0 / MANUAL=2**，含合并确认/空证明目的提示/浏览器 409 冲突实测；记录见 `docs/17_PHASE_9D3_WALKTHROUGH.md`） |
 
 ### 未运行 / 环境阻塞
 
-- **Docker Compose**：本开发环境无 Docker，`docker-compose.yml` 按规格编写但**从未执行**。数据库用原生 PostgreSQL 15 代替。
+- **Docker 容器实际构建/运行**：本开发环境无 Docker。9-D-4 已补写 `backend/Dockerfile`、`frontend/Dockerfile` 并对 `docker-compose.yml` 做静态评审（补 `NEXT_PUBLIC_API_BASE_URL` build.args），文件与配置均存在，但**镜像构建与 `docker compose up` 实跑未验证**。数据库用原生 PostgreSQL 15 代替。
+- **compose 的 rq worker 服务**：`docker-compose.yml` 的 worker 服务命令引用 `rq`，但 `rq`/`redis` 不在 `backend/requirements.txt`——该服务按现状**无法启动**（属 R6，未在本阶段修复，见风险登记册）。
 - **Playwright 覆盖范围**：仅材料包 9-C 的 12 个场景（`frontend/e2e/`）真实跑过；其余页面（登录、上传、审核、时间轴等）尚无浏览器 E2E，等价覆盖由 `scripts/e2e-smoke.sh` 通过真实 HTTP 完成，前端交互仍需人工过一遍。
 - **headless Chromium 下载名限制**：Playwright 驱动的 headless Chromium 会丢弃含非 ASCII 字符的 `a.download` 值（`suggestedFilename()` 报默认 `download`，裸锚点探测亦复现）。中文保存名的浏览器侧验证改用页面内锚点拦截断言 `a.download` 赋值；真实桌面 Chrome 对非 ASCII `download` 属性值按规范使用，未在本环境验证。
+- **容器 locale 与中文上传路径**：镜像未安装 `locales`（`locale` 报 `Cannot set LC_CTYPE`）时，Playwright `setInputFiles` 对中文文件名路径**静默失败**（`input.files` 为空、无报错、无请求），走查/CI 会假失败；`locale-gen en_US.UTF-8` 后恢复。`curl` 上传脚本不受影响。建议登记为风险 R13。
 - **真实 AI / OCR Provider**：只实现了确定性的 mock provider。生产接入 OpenAI/Anthropic/PaddleOCR 时需补 provider 实现并跑 `docs/12` 的 AI evaluation 数据集。
 - **`STORAGE_BACKEND=s3`**：代码就绪但未连接真实 S3 验证。
+
+### 备份与恢复（9-D-4 新增）
+
+- `scripts/backup.sh`：`pg_dump --format=custom` + `tar` 整个 storage 目录，输出到带时间戳的目录（含 `manifest.txt` 记录行数）。
+- `scripts/restore.sh`：`pg_restore --clean --if-exists` + 解包 storage；恢复后自动核对 `cases`/`evidence` 行数与 manifest 一致。
+- 用法与本机演练记录见 `docs/17_PHASE_9D3_WALKTHROUGH.md` §13；**试用真实材料前必须先跑一次备份**。
 
 ## 已知限制
 

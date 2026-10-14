@@ -80,9 +80,14 @@ def test_export_pdf_contains_page_numbers(client, auth_headers, case_id):
     import pymupdf
 
     with pymupdf.open(stream=data, filetype="pdf") as doc:
-        full_text = "".join(page.get_text("text") for page in doc)
+        page_texts = [page.get_text("text") for page in doc]
+        total = doc.page_count
+    full_text = "".join(page_texts)
     assert "第 1 页 / 共" in full_text
     assert "证据目录" in full_text
+    # Every footer must state the true document total (not the current page).
+    for i, text in enumerate(page_texts, start=1):
+        assert f"第 {i} 页 / 共 {total} 页" in text, f"page {i} footer wrong: {text[-80:]!r}"
 
 
 def test_export_zip_bundles_documents_and_originals(client, auth_headers, case_id):

@@ -99,10 +99,10 @@
 
 | # | 风险 | 严重度 | 触发条件 | 验证方法 | 建议顺序 |
 |---|---|---|---|---|---|
-| R1 | **compose 引用的 `backend/Dockerfile`、`frontend/Dockerfile` 不存在**，`docker compose up` 必失败 **[事实：目录已列]** | 高 | 任何容器化部署 | 本环境无 docker，无法实跑；补写后只能静态评审+外部验证 | 1（需确认是否属本阶段范围） |
-| R2 | Docker/compose 从未执行过 **[事实 README 自述]** | 高 | 部署 | 同上，标记"未验证能力" | 随 R1 |
+| R1 | **compose 引用的 `backend/Dockerfile`、`frontend/Dockerfile` 不存在**，`docker compose up` 必失败 **[事实：目录已列]** → **9-D-4 已补写两个 Dockerfile + compose 补 build.args（NEXT_PUBLIC 需构建期内联）；静态评审通过；本环境无 docker，容器实际构建/运行仍标"未验证"** | 高 | 任何容器化部署 | 已完成静态评审；容器实跑留待有 Docker 的环境 | 1 |
+| R2 | Docker/compose 从未执行过 **[事实 README 自述]** → **9-D-4：静态评审发现 compose 引用不存在文件的问题（R1）已修复；Docker 构建本身仍"未验证"** | 高 | 部署 | 静态评审；实跑留待外部环境 | 随 R1 |
 | R3 | `SECRET_KEY`/compose 回退值 `change-me-in-production`，dev 库口令 `leo_dev_pw` 写死在 compose **[事实]** | 高 | 生产启动 | 代码评审+启动检查清单（可在 lifespan 加生产环境缺 secret 拒绝启动——**属改动，待批**） | 2 |
-| R4 | **无任何备份/恢复脚本或文档**（grep 无命中 **[事实]**）——真实材料一旦试用即不可恢复 | 高 | 试用开始前 | 编写 `pg_dump`+storage 目录备份脚本并在本机演练恢复 | 1（建议与材料验证并行） |
+| R4 | **无任何备份/恢复脚本或文档**（grep 无命中 **[事实]**）——真实材料一旦试用即不可恢复 → **9-D-4 已补 `scripts/backup.sh`/`scripts/restore.sh`，并本机真实演练通过（marker 注入→备份→删除→恢复→逐行核对一致）** | 高 | 试用开始前 | 已完成演练并记录于 docs/17 §13 | 1 |
 | R5 | S3 后端**装不上也测不了**：`boto3` 不在 requirements **[事实]**，S3Storage 全部 `pragma: no cover` | 中 | 切 `STORAGE_BACKEND=s3` | 需要真实桶；本环境不可验，只记录 | 3 |
 | R6 | `JOB_BACKEND=rq` 路径（compose 的 worker 服务）**从未在本环境执行**（全程 inline）**[事实]** | 中 | 容器部署 | 本机装 redis 可部分验证；否则记录 | 3 |
 | R7 | 真实 AI/OCR Provider 从未接入（只有 mock）**[事实]**；图片材料因此无文字 | 中 | 试用体验核心 | 属"不新增 AI 能力"边界外，只记录+在材料报告如实呈现 | 记录 |
@@ -160,3 +160,121 @@
 
 ### 2026-10-13 用户：以后回答都写进去
 已确认：此后本会话中的每次回答，除在对话中输出外，同步追加写入本节下方，按时间倒序或顺序追加记录。
+
+### 2026-10-13 回答：9-D-3 走查（T1-T8）执行结果
+
+完整记录：`docs/17_PHASE_9D3_WALKTHROUGH.md`（证据在 `walkthrough-9d3/`）。
+
+**结论：走查完成，PASS=37 / ISSUE=2 / MANUAL=2。**
+
+1. **环境先修复**：容器重建导致 venv、node_modules、PostgreSQL 全丢（备份排除项），
+   已重装并跑通迁移；另修两处缺陷——
+   - `requirements.txt` 缺 `email-validator`，README 快速开始装完依赖即 `ImportError`
+     （已补，全新 venv 验证 `import app.main` OK）；
+   - 容器 locale 缺失（`en_US.UTF-8` 未生成）导致 Playwright `setInputFiles` 对
+     **中文路径静默丢文件**，走查在 T2 卡死（`locale-gen` 修复；建议登记为 R13）。
+2. **通过项**：T1 首次进入、T2 资料库状态与重试、T3 人工修订不覆盖提示、
+   T3b 低置信「置信度低，请人工确认」、T4 双态徽标/已人工修改/证明目的编辑、
+   T6 材料包四词区分与「发布≠锁定」（确认框+发布后仍可编辑）、T7 无快照指引→写条目→
+   建快照→UI 生成 PDF→**真实下载并文本校验**（编号、拟证明事项、中文非乱码、
+   与人工修订值一致）、T8 免责声明与上传拒绝原因。
+3. **两个有依据的问题（未改代码）**：
+   - **P2** `/cases/{id}/timeline` 合并事件无确认、点击即不可逆（`timeline/page.tsx:100`，
+     删除事件 `:90` 却有 confirm）；
+   - **P3** `/cases/{id}/evidence` 证明目的留空无任何后果提示（空值整块渲染消失）。
+4. **回归全绿**：pytest 270 passed；lint / typecheck / vitest 22；Playwright 12 passed；
+   `e2e-real-materials.sh`、`e2e-smoke.sh`、`e2e-material-packages.sh`、`alembic check`
+   全部通过（`next build` 留到 9-D-5 停服后跑）。
+5. **仍需人工**：卷宗排版观感（`walkthrough-9d3/t7-材料包卷宗.pdf`）；
+   409 `VERSION_CONFLICT` 的浏览器文案（后端测试已过，前端仅代码检查）。
+
+下一步等你选择：先修 §3 两条问题，或直接进入 9-D-4（部署风险处置，需批准）。
+
+### 2026-10-13 回答：9-D-3a/3b 修复与补齐人工验证（授权指令执行完毕）
+
+用户授权顺序：9-D-3a → 9-D-3b → 9-D-4 → 9-D-5。本轮完成 3a/3b，**等待确认后再进 9-D-4**。
+完整记录：`docs/17_PHASE_9D3_WALKTHROUGH.md` §8-§11。
+
+**9-D-3a（两个走查问题已修）**
+1. P2 合并确认：`timeline-ui.ts` 新增 `buildMergeConfirmMessage`（列出受影响事件标题+日期、
+   合并后果、**不可撤销**）+ `timeline/page.tsx` 在 `api.mergeEvents` 前 `window.confirm`，
+   取消直接 return（不发请求、不改数据）。单测 `timeline-ui.test.ts`。
+   顺带发现并修复后端缺陷：merge 端点**从未 commit**（`get_db.close()` 生产回滚，单测因共享
+   session 假通过）；已补 `db.commit()` + 独立 session 回归测试。
+2. P3 空证明目的提示：`evidence/page.tsx` 非编辑态显示「尚未填写拟证明事项，可编辑补充」+
+   编辑快捷入口，编辑态 placeholder；有值时原样显示。不改数据结构/材料包规则。
+
+**9-D-3b（补齐人工验证）**
+1. PDF 逐页视觉检查（PyMuPDF 渲染看图，不只文本抽取）：3 页卷宗，中文字体（STSong-Light）、
+   目录表格、正文分页**均正常**；**发现新问题 P3**——页脚「第 X 页 / 共 Y 页」的 Y 错误
+   （`export.py:77` 把当前页码当总页数，3 页文档每页都写「共 N 页」N=本页码）。
+   已定位根因，**未修**（超出 3a 授权范围，待你决定）。
+2. 浏览器实测 409 VERSION_CONFLICT：双标签页同开编辑页，A 保存后 B 保存 → API **409** +
+   UI 提示「材料包已被其他人修改…本次保存未生效」+「重新加载」按钮 + 服务端 draft_version
+   未被推进。此前 docs/17 §6 的「未验证」项已闭环。
+
+**回归全绿**：pytest **271 passed**（+1 commit 回归）｜lint/tsc/vitest **23**｜Playwright **12**｜
+`e2e-smoke.sh` / `e2e-material-packages.sh` / `e2e-real-materials.sh` / `alembic check` 全通过｜
+走查重跑 **PASS=44 / ISSUE=0 / MANUAL=2**。
+
+**待你决定的剩余问题**：PDF 页脚总数 bug（P3，根因已定位在 `export.py:77`，修法为两遍 build
+或 canvas 计数）。是否随 9-D-4 一起修，或单独修，或不修？
+
+### 2026-10-13 回答：9-D-3c 修复 PDF 页脚总页数错误（P3）；获准进入 9-D-4
+
+用户指令：先修 P3 页脚，回归清单跑完出报告，再进 9-D-4。已完成，记录见 `docs/17` §12。
+
+**修复**：根因是 `export.py:_page_footer` 拿 `doc.page`（build 期间=当前页码）当总页数。
+改为 `_page_footer(total_pages)` 工厂 + `_build_pdf(story_factory)` 两遍构建
+（第一遍渲临时 buffer 数页数 `probe.page`，第二遍写真实总数；footer 画在页边距内不占
+flowable 空间，两遍分页一致）。`render_pdf` 与 `render_package_pdf` 均改用；导出内容
+结构不变、不换框架；DOCX 无页码 footer 不受影响。
+
+**测试**：新增 `test_pdf_footer_shows_true_total_page_count`（2 材料→3 页：每页「共 3 页」+
+第 1/2/3 页各自「第 N 页 / 共 3 页」）；强化案件导出逐页断言。
+
+**回归（全部实跑）**：pytest **272 passed**（+1 页脚用例）｜tsc 0｜lint 0｜vitest **23**｜
+Playwright **12**｜`e2e-smoke.sh` 通过｜`e2e-material-packages.sh` 14 步通过｜
+`alembic check` 无漂移。
+
+**下一阶段**：已按授权进入 **9-D-4 部署风险处置**（R1 补 `backend/Dockerfile`、
+`frontend/Dockerfile` + compose 静态评审；R4 新增 `scripts/backup.sh`/`restore.sh`
+并本机真实演练一轮）。9-D-4 完成后是 9-D-5 汇总。
+
+### 2026-10-14 回答：9-D-4 完成（R1 Dockerfile 补写 + compose 静态评审；R4 备份/恢复脚本+真实演练）
+
+按批准范围完成，未改 R3/R6 等范围外风险：
+
+- **R1**：新增 `backend/Dockerfile`、`frontend/Dockerfile`（含 `.dockerignore`）。
+  compose 静态评审发现并修复：frontend 缺 `build.args.NEXT_PUBLIC_API_BASE_URL`
+  （Next 构建期内联，仅 runtime env 无效）。`yaml.safe_load` 通过。
+  确认 R6：worker 服务命令引用 `rq` 但依赖未装、代码零引用——**按现状无法启动，仅登记不修**。
+- **R4**：新增 `scripts/backup.sh`/`scripts/restore.sh`；本机真实演练一轮
+  （marker 注入→备份（db.dump 168K + storage.tar.gz 909M）→删除→恢复→行数与
+  字节级内容核对一致→清理回基线）。演练记录见 `docs/17` §13。
+- 风险登记册 R1/R2/R4 已更新为"已处置/已演练"；R3/R6/R10/R12 维持原状待批。
+
+**下一阶段**：9-D-5 汇总（9-D 报告 + 全量回归一遍 + `next build`）。
+
+### 2026-10-14 回答：9-D-5 完成（全量回归 + next build + 汇总报告）；Phase 9-D 完结
+
+- 全量回归收尾全绿：pytest **272**、tsc/lint 0、vitest **23**、Playwright **12**、
+  e2e-smoke / e2e-material-packages / e2e-real-materials（M1-M12+七跳链）通过、
+  走查 **PASS=44 / ISSUE=0 / MANUAL=2**、alembic check 无漂移。
+- **`npm run build` 首次实跑通过**（17 个路由，首屏共享 JS 87.2 kB）；构建覆盖了 dev
+  `.next` 后重启 dev server 复核走查仍 PASS。
+- 汇总报告写入 `docs/18_PHASE_9D_FINAL_REPORT.md`：材料矩阵 M1-M12 逐份预期 vs 实际
+  全通过（M3 置信度按实际 0.96 修正）；可用性问题 U1-U8（U1-U3 已修，其余记录）；
+  风险登记册 R1-R13 现状（R1/R2/R4 已处置/已演练，R3/R5/R6/R8-R12 待批或记录）；
+  试用决策建议（单机+内网+先备份+明示 U4/U7 可试用）。
+- **Phase 9-D 完结**，不启动 Phase 10，不提交 Git（按边界）。
+
+### 2026-10-14 回答：9-D-5.1 收尾确认 + Phase 9-D 最终封版
+
+用户指令：仅复核 P3 页脚总页数（不扩范围、不改材料包规则），补 PDF 视觉检查和 export
+回归，输出封版记录；不进 Phase 10，Docker/S3/RQ/真实 AI Provider 保持待办。
+
+- 该缺陷已在 9-D-3c 修复；本次**零新改动**，仅复核：export 回归 **32 passed**；
+  实时 HTTP 生成 4 页卷宗、PyMuPDF 渲染逐页断言「第 N 页 / 共 4 页」通过；人工看图
+  page1/page4 页脚正确。
+- **Phase 9-D 最终封版记录**写入 `docs/18` §8。

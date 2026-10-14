@@ -188,6 +188,7 @@ export default function EvidencePage() {
                     <textarea
                       className="input"
                       rows={2}
+                      placeholder="尚未填写拟证明事项，可在此补充"
                       value={draft.proof_purpose ?? ""}
                       onChange={(e) => setDraft({ ...draft, proof_purpose: e.target.value })}
                     />
@@ -204,10 +205,20 @@ export default function EvidencePage() {
               ) : (
                 <div className="space-y-1 border-t border-slate-100 pt-3 text-sm">
                   {row.summary && <p className="text-slate-700">{row.summary}</p>}
-                  {row.proof_purpose && (
+                  {row.proof_purpose ? (
                     <p className="text-slate-500">
                       <span className="ai-badge mr-1">AI 建议</span>
                       {row.proof_purpose}
+                    </p>
+                  ) : (
+                    <p className="text-slate-400">
+                      尚未填写拟证明事项，可编辑补充
+                      <button
+                        className="ml-2 text-slate-600 underline"
+                        onClick={() => startEdit(row)}
+                      >
+                        编辑
+                      </button>
                     </p>
                   )}
                   <div className="flex gap-3 pt-1">
