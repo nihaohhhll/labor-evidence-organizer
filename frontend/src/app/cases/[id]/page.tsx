@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ApiError, api } from "@/lib/api";
@@ -81,9 +82,9 @@ export default function CaseDetailPage() {
           { href: `/cases/${c.id}/material-packages`, label: "材料包" },
           { href: `/cases/${c.id}/export`, label: "导出中心" },
         ].map((l) => (
-          <a key={l.href} href={l.href} className="card hover:border-slate-400">
+          <Link key={l.href} href={l.href} className="card hover:border-slate-400">
             {l.label}
-          </a>
+          </Link>
         ))}
       </div>
 

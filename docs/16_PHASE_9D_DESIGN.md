@@ -278,3 +278,38 @@ Playwright **12**｜`e2e-smoke.sh` 通过｜`e2e-material-packages.sh` 14 步通
   实时 HTTP 生成 4 页卷宗、PyMuPDF 渲染逐页断言「第 N 页 / 共 4 页」通过；人工看图
   page1/page4 页脚正确。
 - **Phase 9-D 最终封版记录**写入 `docs/18` §8。
+
+### 2026-10-14 回答：修复 Hugging Face Spaces 浏览器访问卡在"正在跳转…"
+
+用户在 HF Spaces 云工作站浏览器访问前端时根路由卡在"正在跳转…"。根因：Next.js 输出
+绝对路径 `/_next/...`，浏览器请求主机根路径命中 code-server 而非 Next.js → JS 全 404
+→ 根路由 `router.replace("/cases")` 不执行。本地直连 `127.0.0.1:3000` 实测正常，仅
+code-server `/proxy/3000/` 前缀路径坏。
+
+**修复方案**（同 OpenClaw Control UI 代理模式）：
+1. `frontend/next.config.js`：`basePath` 由 `NEXT_PUBLIC_BASE_PATH` 注入；`distDir`
+   由 `NEXT_DIST_DIR` 注入（隔离本地 :3000 与代理 :3002 的构建缓存）。
+2. `frontend/code-server-proxy.mjs`（新建）：监听 :3001，给被 code-server 剥掉的
+   路径补回 `/proxy/3001`，转发到 :3002；含 WebSocket upgrade 转发（HMR）。
+   修复 trailing-slash 重定向放大问题（Next.js basePath 对 `/proxy/3001/` 308 到
+   `/proxy/3001`，code-server 再拼前缀成 `/proxy/3001/proxy/3001`）——bare `/`
+   直接映射到无斜杠 basePath，避免重定向。
+3. 代理实例 :3002 启动参数：
+   - `NEXT_PUBLIC_BASE_PATH=/proxy/3001`（资产 URL + 客户端路由带前缀）
+   - `NEXT_PUBLIC_API_BASE_URL=/proxy/8000/api/v1`（浏览器 fetch 经 code-server
+     到后端，同源免 CORS）
+   - `NEXT_DIST_DIR=.next-proxy`
+4. `scripts/start-frontend-proxy.sh`（新建）：一键启动 + 冒烟测试。
+5. `lib/api.ts` 无需改动——`NEXT_PUBLIC_API_BASE_URL` 覆盖默认值即可。
+
+**验证**（经 code-server :7860 模拟真实浏览器路径）：
+- `GET /proxy/3001/` → 200，HTML 资源带 `/proxy/3001/_next/...` 前缀
+- `GET /proxy/3001/_next/static/chunks/webpack.js` → 200
+- `GET /proxy/8000/healthz` → 200（API 同源可达）
+- Playwright 端到端：注册 → 201 → token 写入 localStorage → 客户端跳转
+  `/proxy/3001/cases` → 案件列表 200，零 JS 错误
+- 本地 `:3000` 直连不受影响（`NEXT_PUBLIC_BASE_PATH` 未设时 basePath 为空）
+
+**可访问 URL**：`https://lldakjd-aa.hf.space/proxy/3001/`
+
+**边界**：不进 Phase 10；Docker 实跑 / S3 / RQ / 真实 AI Provider 仍待办。
