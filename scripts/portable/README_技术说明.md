@@ -74,13 +74,37 @@ taskkill。start.bat 先调 stop，重复双击不会起重复实例。
 资源 200。过程中会临时占用 8000/3000，结束时用 dev-restart-* 脚本恢复
 开发服务。
 
-## 五、已知边界 / 待办
+## 五、一键安装版（NSIS）
 
-- **Windows 实机未测**：bat 脚本、embeddable Python、任务管理（按端口
-  taskkill）均按官方文档行为编写，需在真实 Windows 10/11 上跑一遍
-  start.bat → 浏览器注册 → 上传 → 导出的完整链路。
+```bash
+apt-get install nsis            # makensis 3.x
+bash scripts/build-installer.sh # 默认先构建绿色 stage；--reuse-stage 跳过
+# -> dist/labor-evidence-setup-<ver>-win64.exe
+```
+
+- 选 NSIS 而非 Inno Setup：ISCC.exe 只能在 Windows/Wine 运行，makensis
+  在 Linux 上直接交叉编译 Windows 安装器，功能等价（自选目录、开始菜单/
+  桌面快捷方式、控制面板卸载项、完成后启动）。
+- 安装器载荷 = 绿色版 stage 树（同源同字节）：按用户安装（无 UAC，
+  默认 `%LOCALAPPDATA%\Programs\LaborEvidenceOrganizer`，ASCII 路径
+  规避非 ANSI cwd 边界）、LZMA solid 压缩（252MB → 64MiB exe）。
+- 卸载时 MessageBox 提醒 data 会被一并删除（先备份）。
+- 已实测（Linux 侧）：makensis 编译、PE 结构、7z 列出全部 7332 文件、
+  Wine 8.0 + Xvfb 静默安装 `/S /D=C:\leotest` 26 秒落盘，与 stage
+  逐文件一致（cmp 抽验 + 文件数相等）。
+- **Wine 下无法验证应用启动**：embeddable Python 在 wine console 中
+  `init_sys_streams ... WinError 6`（wine 的 ConHost/stdio 兼容限制，
+  非包缺陷；宿主 python+node 对同一 stage 的冒烟通过）。真机验证清单
+  见第六节。
+
+## 六、已知边界 / 待办
+
+- **Windows 实机未做启动链路实测**：安装器本身已在 Wine 静默安装验证，
+  但 start.bat → uvicorn/node → 浏览器 的完整链路需在真实 Windows
+  10/11 上跑一遍（wine 的 console 句柄问题不影响真机）。
 - 仅监听 127.0.0.1，单机使用；局域网共享需另行改 NEXT_PUBLIC_API_BASE_URL
   重新构建并调整 CORS（不在支持范围）。
 - 端口 8000/3000 需空闲；冲突时关闭占用程序。
-- 升级版本：改 `backend/app/__init__.py` 的 `__version__` 后重跑两个脚本。
-- 数据备份：stop 后整体拷贝 `data/` 目录。
+- 升级版本：改 `backend/app/__init__.py` 的 `__version__` 后重跑
+  build-portable.sh 与 build-installer.sh。
+- 数据备份：关闭程序后整体拷贝 `data/` 目录。

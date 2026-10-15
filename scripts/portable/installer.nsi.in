@@ -1,0 +1,111 @@
+; Labor Evidence Organizer - Windows one-click installer (NSIS).
+; Generated/parameterized by scripts/build-installer.sh — do not edit the
+; generated copy in dist/. Compiled on Linux with makensis; runs on
+; Windows 10/11 (per-user install, no admin/UAC prompt).
+;
+; The payload is exactly the green/portable stage tree: the app installs by
+; unpacking it and start.bat works the same as the zip edition.
+
+!define PRODUCT_NAME "劳动争议证据整理器"
+!define PRODUCT_NAME_ASCII "LaborEvidenceOrganizer"
+!define PRODUCT_VERSION "@VERSION@"
+!define STAGE_DIR "@STAGE@"
+!define OUT_FILE "@OUT@"
+
+Unicode true
+Name "${PRODUCT_NAME} ${PRODUCT_VERSION}"
+OutFile "${OUT_FILE}"
+; Per-user install: no UAC; default under %LOCALAPPDATA%\Programs (ASCII path
+; keeps the bundled python/node runtimes away from non-ANSI cwd edge cases).
+InstallDir "$LOCALAPPDATA\Programs\${PRODUCT_NAME_ASCII}"
+InstallDirRegKey HKCU "Software\${PRODUCT_NAME_ASCII}" "InstallDir"
+RequestExecutionLevel user
+SetCompressor /SOLID lzma
+
+!include "MUI2.nsh"
+!include "FileFunc.nsh"
+
+Var StartMenuFolder
+
+!define MUI_ABORTWARNING
+; Finish page: launch the app right away.
+!define MUI_FINISHPAGE_RUN "$INSTDIR\start.bat"
+!define MUI_FINISHPAGE_RUN_TEXT "立即启动 ${PRODUCT_NAME}"
+
+!insertmacro MUI_PAGE_WELCOME
+!insertmacro MUI_PAGE_COMPONENTS
+!insertmacro MUI_PAGE_DIRECTORY
+!insertmacro MUI_PAGE_STARTMENU "Application" $StartMenuFolder
+!insertmacro MUI_PAGE_INSTFILES
+!insertmacro MUI_PAGE_FINISH
+
+!insertmacro MUI_UNPAGE_CONFIRM
+!insertmacro MUI_UNPAGE_INSTFILES
+
+!insertmacro MUI_LANGUAGE "SimpChinese"
+!insertmacro MUI_LANGUAGE "English"
+
+; ---------------------------------------------------------------------------
+Section "主程序 (required)" SecMain
+  SectionIn RO
+  SetOutPath "$INSTDIR"
+  File /r "${STAGE_DIR}\*.*"
+
+  WriteUninstaller "$INSTDIR\uninstall.exe"
+
+  ; Control-panel / Settings entry (per-user uninstall register).
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME_ASCII}" \
+    "DisplayName" "${PRODUCT_NAME}"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME_ASCII}" \
+    "DisplayVersion" "${PRODUCT_VERSION}"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME_ASCII}" \
+    "Uninstaller" "$INSTDIR\uninstall.exe"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME_ASCII}" \
+    "DisplayIcon" "$INSTDIR\start.bat"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME_ASCII}" \
+    "Publisher" "labor-evidence-organizer"
+  ; $0 = size in chosen units, $1 = unit label (this FileFunc build has
+  ; only 3 result vars — no byte-count 4th one).
+  ${GetSize} "$INSTDIR" "/S=K" $0 $1 $2
+  IntFmt $0 "0x%08X" $0
+  WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME_ASCII}" \
+    "EstimatedSize" "$0"
+
+  !insertmacro MUI_STARTMENU_WRITE_BEGIN Application
+    CreateDirectory "$SMPROGRAMS\$StartMenuFolder"
+    CreateShortCut "$SMPROGRAMS\$StartMenuFolder\启动 ${PRODUCT_NAME}.lnk" \
+      "$INSTDIR\start.bat" "" "$INSTDIR\start.bat" 0 SW_SHOWMINIMIZED "" "" "$INSTDIR"
+    CreateShortCut "$SMPROGRAMS\$StartMenuFolder\使用说明.lnk" \
+      "$INSTDIR\README.txt" "" "$INSTDIR\README.txt" 0 "" "" "$INSTDIR"
+    CreateShortCut "$SMPROGRAMS\$StartMenuFolder\卸载 ${PRODUCT_NAME}.lnk" \
+      "$INSTDIR\uninstall.exe" "" "$INSTDIR\uninstall.exe" 0 "" "" "$INSTDIR"
+  !insertmacro MUI_STARTMENU_WRITE_END
+SectionEnd
+
+Section "桌面快捷方式" SecDesktop
+  CreateShortCut "$DESKTOP\${PRODUCT_NAME}.lnk" \
+    "$INSTDIR\start.bat" "" "$INSTDIR\start.bat" 0 SW_SHOWMINIMIZED "" "" "$INSTDIR"
+SectionEnd
+
+; ---------------------------------------------------------------------------
+Section "Uninstall"
+  ; Data lives inside the install dir (data\leo.db + data\storage). Uninstalling
+  ; wipes it — warn first so the user can back data\ up.
+  MessageBox MB_YESNO|MB_ICONEXCLAMATION \
+    "卸载将删除 $INSTDIR 中的全部文件，包括 data 文件夹内的案件数据和上传材料。$\n$\n建议先备份 data 文件夹。$\n$\n确定要卸载吗？" \
+    IDYES do_uninstall
+    Abort
+  do_uninstall:
+
+  Delete "$DESKTOP\${PRODUCT_NAME}.lnk"
+  !insertmacro MUI_STARTMENU_GETFOLDER "Application" $StartMenuFolder
+  Delete "$SMPROGRAMS\$StartMenuFolder\启动 ${PRODUCT_NAME}.lnk"
+  Delete "$SMPROGRAMS\$StartMenuFolder\使用说明.lnk"
+  Delete "$SMPROGRAMS\$StartMenuFolder\卸载 ${PRODUCT_NAME}.lnk"
+  RMDir "$SMPROGRAMS\$StartMenuFolder"
+
+  DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME_ASCII}"
+  DeleteRegKey HKCU "Software\${PRODUCT_NAME_ASCII}"
+
+  RMDir /r "$INSTDIR"
+SectionEnd

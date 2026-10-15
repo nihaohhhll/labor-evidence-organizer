@@ -434,3 +434,28 @@ A: 可以。选型：**绿色便携版优先**（解压即用、自选目录=解
 （.env 随机密钥、_pth、uvicorn/passlib、node.exe、static 全在）；
 dev 服务恢复 healthz ok + web 200。**Windows 实机未测**（bat/embed/
 taskkill 按官方文档行为编写），需在真机跑 start→注册→上传→导出全链路。
+
+### Q: 一键安装版怎么做？（NSIS）
+A: `scripts/build-installer.sh` + `scripts/portable/installer.nsi.in`，
+产出 `dist/labor-evidence-setup-0.1.0-win64.exe`（64MiB，LZMA solid，
+252MB 载荷）。**选 NSIS 弃 Inno Setup**：ISCC.exe 只能 Windows/Wine 跑，
+makensis（apt install nsis）在 Linux 直接交叉编译，功能等价——欢迎页/
+组件页（桌面快捷方式可选）/自选目录/开始菜单/完成后启动/控制面板卸载项。
+- 载荷=绿色版 stage 树（同源）：按用户安装无 UAC，默认
+  `%LOCALAPPDATA%\Programs\LaborEvidenceOrganizer`（ASCII 路径规避
+  embed python 的非 ANSI cwd 边界）；卸载 MessageBox 提醒 data 一并删除。
+- 坑：Debian nsis 3.08 的 FileFunc `GetSize` 只有 5 参（无新版第 4 个
+  字节结果），首版模板 6 参报 "requires 5 parameter(s)"，改为 3 结果变量。
+- **验证**：makensis 编译 ✓；`file` = PE32 Nullsoft ✓；7z 列出全部
+  7332 文件（python.exe/node.exe/server.js/.env/bat 全在）✓；
+  **Wine 8.0 + Xvfb 静默安装**（`/S /D=C:\leotest`，26s）落盘结构完整，
+  文件数与 stage 相等、cmp 抽验字节一致 ✓。
+- **Wine 端到端启动不可行**：embeddable Python 在 wine console 里
+  `init_sys_streams ... WinError 6`（wine ConHost/stdio 限制，重定向
+  cmd 内部句柄也救不了；非包缺陷——宿主 python+node 对同一 stage 冒烟
+  通过）。另两个 wine 特有现象：`timeout` 命令缺失（真机自带）、
+  `start /min` 子控制台随主退出被连带杀（真机 start 开新 console 独立）。
+  → 真机验证仍是发布前必做清单：安装向导 UI、start→注册→上传→导出、
+  控制面板卸载。
+- README.txt 增补两种发行形式说明与卸载章节；zip/exe 同批重建（内容
+  同源），第三轮 portable-smoke OK。
