@@ -57,6 +57,14 @@ _PY311="$STAGE/python/python311._pth"
 sed -i 's/\r$//; s/^#import site$/import site/' "$_PY311"
 grep -qF 'Lib\site-packages' "$_PY311" || echo 'Lib\site-packages' >> "$_PY311"
 grep -qF 'import site' "$_PY311" || echo 'import site' >> "$_PY311"
+# A ._pth file takes over sys.path completely and forces safe_path (CPython
+# Modules/getpath.py: config['safe_path'] = 1), so the working directory is
+# NEVER importable — `python -c "from app.db import ..."` from backend/ dies
+# with ModuleNotFoundError on Windows (Linux smoke uses a normal python and
+# cannot catch this). Relative ._pth entries resolve against the ._pth
+# directory, so the package root next to python/ is one '..\backend' away:
+# add it so every python.exe invocation finds the app package.
+grep -qF '..\backend' "$_PY311" || echo '..\backend' >> "$_PY311"
 
 # ---- 2. backend -----------------------------------------------------------
 log "backend: code + win_amd64 dependencies"
@@ -126,6 +134,9 @@ cp "$REPO/scripts/portable/README_技术说明.md" "$STAGE/README-tech.md"
 
 # ---- 5. zip ---------------------------------------------------------------
 log "zipping -> $OUT_ZIP"
+# Byte-identical trees across artifacts: no bytecode caches (pip compiles
+# some site-packages on install) and no smoke-test residue.
+find "$STAGE" -type d -name __pycache__ -exec rm -rf {} +
 rm -f "$OUT_ZIP"
 (
   cd "$REPO/dist/portable"
