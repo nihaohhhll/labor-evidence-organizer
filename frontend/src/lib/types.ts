@@ -29,6 +29,12 @@ export type CaseDetail = CaseSummary & {
   event_count: number;
 };
 
+export type CaseNarrative = {
+  narrative: string;
+  provider: string;
+  model: string;
+};
+
 export type CasePage = {
   items: CaseSummary[];
   total: number;

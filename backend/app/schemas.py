@@ -194,6 +194,14 @@ class CaseDetailOut(CaseOut):
     event_count: int = 0
 
 
+class CaseNarrativeOut(BaseModel):
+    """AI draft only — the client saves it via PATCH /cases/{id}."""
+
+    narrative: str = Field(min_length=1, max_length=5000)
+    provider: str
+    model: str
+
+
 class Page(BaseModel):
     items: list[CaseOut]
     total: int

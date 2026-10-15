@@ -120,6 +120,33 @@ def get_export(export_id: uuid.UUID, db: DbDep, user: CurrentUser) -> ExportJobO
     return ExportJobOut.model_validate(_get_owned_export(db, user, export_id))
 
 
+@router.delete("/exports/{export_id}", status_code=204)
+def delete_export(export_id: uuid.UUID, db: DbDep, user: CurrentUser) -> Response:
+    job = _get_owned_export(db, user, export_id)
+    case = owned_case_or_404(db, job.case_id, user.id)
+
+    # Remove the artifact first — a half-deleted row with an orphan object is
+    # worse than a missing row with no object.
+    if job.storage_key:
+        try:
+            get_storage().delete(job.storage_key)
+        except FileNotFoundError:
+            pass
+
+    audit(
+        db,
+        action=AuditAction.EXPORT_DELETED,
+        user_id=user.id,
+        case_id=case.id,
+        entity_type="export",
+        entity_id=job.id,
+        metadata={"format": job.format, "status": job.status},
+    )
+    db.delete(job)
+    db.commit()
+    return Response(status_code=204)
+
+
 @router.get("/exports/{export_id}/download")
 def download_export(export_id: uuid.UUID, db: DbDep, user: CurrentUser) -> Response:
     job = _get_owned_export(db, user, export_id)

@@ -23,7 +23,7 @@ const STATUS_LABEL: Record<string, string> = {
   FAILED: "失败",
 };
 
-/** 导出中心: generate and download the evidence bundle. */
+/** 导出中心: generate, preview, download and delete the evidence bundle. */
 export default function ExportPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -31,6 +31,8 @@ export default function ExportPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [viewing, setViewing] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setState({ kind: "loading" });
@@ -78,6 +80,38 @@ export default function ExportPage() {
       setNotice(err instanceof ApiError ? err.message : "下载失败");
     } finally {
       setDownloading(null);
+    }
+  }
+
+  // Preview: fetch the bytes with the token, open a blob URL in a new tab.
+  async function view(job: ExportJob) {
+    setViewing(job.id);
+    setNotice(null);
+    try {
+      const blob = await api.fetchExportBlob(job.id);
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noreferrer");
+      // Revoke after the browser has had time to start rendering.
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      setNotice(err instanceof ApiError ? err.message : "预览失败");
+    } finally {
+      setViewing(null);
+    }
+  }
+
+  async function remove(job: ExportJob) {
+    if (!window.confirm(`确定删除这次「${FORMAT_LABEL[job.format] ?? job.format}」导出吗？`)) return;
+    setDeleting(job.id);
+    setNotice(null);
+    try {
+      await api.deleteExport(job.id);
+      setNotice("已删除该导出记录。");
+      await load();
+    } catch (err) {
+      setNotice(err instanceof ApiError ? err.message : "删除失败");
+    } finally {
+      setDeleting(null);
     }
   }
 
@@ -159,14 +193,30 @@ export default function ExportPage() {
                     {STATUS_LABEL[job.status] ?? job.status}
                   </span>
                   {job.status === "COMPLETED" && (
-                    <button
-                      className="btn-ghost"
-                      disabled={downloading !== null}
-                      onClick={() => void download(job)}
-                    >
-                      {downloading === job.id ? "下载中…" : "下载"}
-                    </button>
+                    <>
+                      <button
+                        className="btn-ghost"
+                        disabled={viewing !== null || downloading !== null}
+                        onClick={() => void view(job)}
+                      >
+                        {viewing === job.id ? "打开中…" : "查看"}
+                      </button>
+                      <button
+                        className="btn-ghost"
+                        disabled={downloading !== null}
+                        onClick={() => void download(job)}
+                      >
+                        {downloading === job.id ? "下载中…" : "下载"}
+                      </button>
+                    </>
                   )}
+                  <button
+                    className="btn-ghost text-red-600"
+                    disabled={deleting !== null}
+                    onClick={() => void remove(job)}
+                  >
+                    {deleting === job.id ? "删除中…" : "删除"}
+                  </button>
                 </div>
               </li>
             ))}

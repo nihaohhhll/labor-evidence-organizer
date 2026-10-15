@@ -131,48 +131,52 @@ export default function TimelinePage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">案件时间轴</h1>
-        <div className="flex gap-2">
-          <button className="btn-ghost" onClick={() => void merge()} disabled={selected.length < 2}>
-            合并所选（{selected.length}）
-          </button>
-          <button className="btn-primary" onClick={() => void build()} disabled={building}>
-            {building ? "生成中…" : "从证据生成"}
+      {/* Sticky header: title + actions + add-event form stay visible while list scrolls */}
+      <div className="sticky top-0 z-10 -mx-1 space-y-4 bg-white px-1 pb-2 pt-1">
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-semibold">案件时间轴</h1>
+          <div className="flex gap-2">
+            <button className="btn-ghost" onClick={() => void merge()} disabled={selected.length < 2}>
+              合并所选（{selected.length}）
+            </button>
+            <button className="btn-primary" onClick={() => void build()} disabled={building}>
+              {building ? "生成中…" : "从证据生成"}
+            </button>
+          </div>
+        </div>
+
+        {notice && (
+          <p className="rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-700" role="status">
+            {notice}
+          </p>
+        )}
+
+        <div className="card flex flex-wrap items-end gap-2">
+          <label className="block text-sm">
+            <span className="mb-1 block text-slate-600">新增事件</span>
+            <input
+              className="input"
+              placeholder="例如：HR 口头通知辞退"
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block text-slate-600">日期（可空）</span>
+            <input
+              className="input"
+              type="date"
+              value={newDate}
+              onChange={(e) => setNewDate(e.target.value)}
+            />
+          </label>
+          <button className="btn-primary" onClick={() => void addEvent()}>
+            添加
           </button>
         </div>
       </div>
 
-      {notice && (
-        <p className="rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-700" role="status">
-          {notice}
-        </p>
-      )}
-
-      <div className="card flex flex-wrap items-end gap-2">
-        <label className="block text-sm">
-          <span className="mb-1 block text-slate-600">新增事件</span>
-          <input
-            className="input"
-            placeholder="例如：HR 口头通知辞退"
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-          />
-        </label>
-        <label className="block text-sm">
-          <span className="mb-1 block text-slate-600">日期（可空）</span>
-          <input
-            className="input"
-            type="date"
-            value={newDate}
-            onChange={(e) => setNewDate(e.target.value)}
-          />
-        </label>
-        <button className="btn-primary" onClick={() => void addEvent()}>
-          添加
-        </button>
-      </div>
-
+      {/* Timeline events — scrolls below the sticky header */}
       {state.events.length === 0 ? (
         <div className="empty-state">还没有时间轴事件。先确认证据，再点「从证据生成」。</div>
       ) : (

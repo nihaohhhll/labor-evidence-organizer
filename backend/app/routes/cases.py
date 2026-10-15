@@ -19,7 +19,8 @@ from app.models.evidence import Evidence
 from app.services.audit import AuditAction, record as audit
 from app.models.event import Event
 from app.models.file import File
-from app.schemas import CaseCreate, CaseDetailOut, CaseOut, CaseUpdate, Page
+from app.schemas import CaseCreate, CaseDetailOut, CaseNarrativeOut, CaseOut, CaseUpdate, Page
+from app.services import narrative as narrative_service
 
 router = APIRouter(prefix="/cases")
 
@@ -126,6 +127,26 @@ def update_case(
         metadata={"changed_fields": changed},
     )
     return _detail(db, case)
+
+
+@router.post("/{case_id}/narrative", response_model=CaseNarrativeOut)
+def generate_narrative(case_id: uuid.UUID, db: DbDep, user: CurrentUser) -> CaseNarrativeOut:
+    """Draft a case narrative from analyzed materials.
+
+    Deliberately a plain `def`: the LLM call runs `asyncio.run` inside the
+    worker thread (same contract as routes/analysis.py). The result is NOT
+    persisted — the client fills the textarea and the user saves it, so an AI
+    draft can never silently overwrite a human-written account.
+    """
+    case = _get_owned(db, user, case_id)
+    try:
+        text, provider, model = narrative_service.generate_case_narrative(db, case)
+    except narrative_service.NarrativeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": exc.code, "message": exc.message},
+        )
+    return CaseNarrativeOut(narrative=text, provider=provider, model=model)
 
 
 @router.delete("/{case_id}", status_code=status.HTTP_204_NO_CONTENT)

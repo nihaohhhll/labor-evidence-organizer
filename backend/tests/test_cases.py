@@ -133,3 +133,53 @@ def test_error_envelope_never_leaks_stack_traces(client, auth_headers):
     text = resp.text
     assert "Traceback" not in text
     assert "File \"" not in text
+
+
+def test_generate_narrative_requires_materials(client, auth_headers, case_id):
+    resp = client.post(f"/api/v1/cases/{case_id}/narrative", headers=auth_headers)
+    assert resp.status_code == 409
+    assert resp.json()["error"]["code"] == "NO_MATERIALS"
+
+
+def test_generate_narrative_from_evidence_and_events(client, auth_headers, case_id, db_session):
+    """Mock provider has no generate_text → deterministic template path."""
+    import uuid as _uuid
+
+    from app.models.case import Case
+    from app.models.evidence import Evidence
+    from app.models.event import Event
+
+    case = db_session.get(Case, _uuid.UUID(case_id))
+    db_session.add(
+        Evidence(
+            case_id=case.id,
+            evidence_number=1,
+            title="labor_contract—劳动合同.pdf",
+            category="labor_contract",
+            summary="张伟于2022年3月1日入职某科技公司，任软件工程师，月工资20000元。",
+        )
+    )
+    db_session.add(
+        Event(
+            case_id=case.id,
+            title="公司发出解除通知",
+            event_date=__import__("datetime").date(2026, 9, 10),
+            precision="day",
+        )
+    )
+    db_session.commit()
+
+    resp = client.post(f"/api/v1/cases/{case_id}/narrative", headers=auth_headers)
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert "2026-09-10 公司发出解除通知" in body["narrative"]
+    assert "张伟于2022年3月1日入职" in body["narrative"]
+    assert body["provider"] == "template"
+    # Generation must not persist — the user saves the draft themselves.
+    db_session.refresh(case)
+    assert case.description == "测试"
+
+
+def test_generate_narrative_denied_for_other_user(client, second_user_headers, case_id):
+    resp = client.post(f"/api/v1/cases/{case_id}/narrative", headers=second_user_headers)
+    assert resp.status_code == 404

@@ -227,6 +227,10 @@ def _queue_review_items(
 
     docs/07 §置信度策略: below 0.80 review is mandatory; a proof_purpose is a
     *suggestion*, so it always needs a human look.
+
+    Re-analysis must not duplicate the queue: if a PENDING item already exists
+    for the same entity+field it is updated in place; if the user already
+    confirmed or discarded that field, nothing new is queued.
     """
     from app.models.review import ReviewItem
 
@@ -243,6 +247,21 @@ def _queue_review_items(
         ]
 
     for field_name, ai_value in fields:
+        existing = db.scalar(
+            select(ReviewItem)
+            .where(
+                ReviewItem.case_id == case_id,
+                ReviewItem.entity_id == evidence.id,
+                ReviewItem.field_name == field_name,
+            )
+            .order_by(ReviewItem.created_at.desc())
+        )
+        if existing is not None:
+            if existing.status == "PENDING":
+                existing.ai_value = ai_value
+                existing.confidence = analysis.confidence
+            # CONFIRMED / DISCARDED: the human already decided — respect it.
+            continue
         db.add(
             ReviewItem(
                 case_id=case_id,

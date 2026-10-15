@@ -43,6 +43,7 @@ class AuditAction:
     REVIEW_DISCARDED = "review.discarded"
     EXPORT_CREATED = "export.created"
     EXPORT_DOWNLOADED = "export.downloaded"
+    EXPORT_DELETED = "export.deleted"
     # Phase 9-A: arbitration material packages.
     MATERIAL_PACKAGE_CREATED = "material_package.created"
     MATERIAL_PACKAGE_UPDATED = "material_package.updated"

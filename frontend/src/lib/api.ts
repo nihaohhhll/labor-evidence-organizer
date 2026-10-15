@@ -187,6 +187,9 @@ export const api = {
   updateCase: (id: string, body: Record<string, unknown>) =>
     request<import("./types").CaseDetail>(`/cases/${id}`, { method: "PATCH", body }),
   deleteCase: (id: string) => request<void>(`/cases/${id}`, { method: "DELETE" }),
+  /** AI draft of the case narrative; not persisted until the user saves it. */
+  generateCaseNarrative: (id: string) =>
+    request<import("./types").CaseNarrative>(`/cases/${id}/narrative`, { method: "POST" }),
 
   // ---- files ----
   uploadFiles: (caseId: string, files: File[]) => {
@@ -293,6 +296,9 @@ export const api = {
   /** Authenticated download of any export job (case bundle or package volume). */
   downloadExport: (id: string, fallbackName = "export-download") =>
     downloadWithAuth(`/exports/${id}/download`, fallbackName),
+  /** Fetch export bytes with the token; used by the in-browser preview. */
+  fetchExportBlob: (id: string) => fetchBlob(`/exports/${id}/download`),
+  deleteExport: (id: string) => request<void>(`/exports/${id}`, { method: "DELETE" }),
 
   // ---- evidence gaps (A3) ----
   triggerEvidenceGaps: (caseId: string) =>

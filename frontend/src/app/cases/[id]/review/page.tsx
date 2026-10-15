@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ApiError, api, getToken } from "@/lib/api";
 import type { EvidenceRow, ReviewItem } from "@/lib/types";
@@ -39,6 +39,21 @@ export default function ReviewPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const listRef = useRef<HTMLElement | null>(null);
+
+  // When the selected original file changes, scroll the evidence list so the
+  // first item belonging to that file sits near the middle of the viewport.
+  useEffect(() => {
+    if (!activeFileId || !listRef.current) return;
+    const container = listRef.current;
+    const card = container.querySelector<HTMLElement>(`[data-file-id="${activeFileId}"]`);
+    if (!card) return;
+    const containerRect = container.getBoundingClientRect();
+    const cardRect = card.getBoundingClientRect();
+    const delta =
+      cardRect.top - containerRect.top - (container.clientHeight - cardRect.height) / 2;
+    container.scrollTo({ top: container.scrollTop + delta, behavior: "smooth" });
+  }, [activeFileId]);
 
   // Fetch the original with the bearer token and swap the iframe src to a
   // blob URL — a bare <iframe src="/files/..."> cannot carry Authorization.
@@ -135,6 +150,14 @@ export default function ReviewPage() {
     .map((e) => e.source_file_id)
     .filter((v): v is string => Boolean(v));
 
+  // One card per evidence: group the pending field suggestions by entity.
+  const grouped = new Map<string, ReviewItem[]>();
+  for (const item of state.items) {
+    const list = grouped.get(item.entity_id) ?? [];
+    list.push(item);
+    grouped.set(item.entity_id, list);
+  }
+
   return (
     <div className="flex h-full flex-col space-y-4">
       <div className="flex items-center justify-between">
@@ -199,55 +222,74 @@ export default function ReviewPage() {
           </section>
 
           {/* Evidence list — right column, scrolls independently */}
-          <section className="min-h-0 space-y-3 overflow-y-auto pr-1">
+          <section ref={listRef} className="min-h-0 space-y-3 overflow-y-auto pr-1">
             <h2 className="text-sm font-semibold text-slate-600">AI 结果与人工修改</h2>
-            {state.items.map((item) => {
-              const evidence = state.evidence.find((e) => e.id === item.entity_id);
-              const edited = evidence?.user_edited_fields.includes(item.field_name) ?? false;
+            {[...grouped.entries()].map(([entityId, items]) => {
+              const evidence = state.evidence.find((e) => e.id === entityId);
               return (
-                <article key={item.id} className="card">
-                  <div className="flex items-center justify-between">
+                <article
+                  key={entityId}
+                  className="card"
+                  data-file-id={evidence?.source_file_id ?? ""}
+                >
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                     <p className="text-sm font-medium">
-                      {FIELD_LABEL[item.field_name] ?? item.field_name}
-                      {evidence ? ` · 证据${evidence.evidence_number}` : ""}
+                      {evidence ? `证据${evidence.evidence_number}` : "未知证据"}
+                      {evidence ? ` · ${evidence.title}` : ""}
                     </p>
-                    {item.confidence !== null && item.confidence < 0.8 && (
-                      <span className="rounded bg-red-100 px-2 py-0.5 text-xs text-red-700">
-                        置信度低，请人工确认
-                      </span>
-                    )}
                   </div>
+                  {items.map((item, idx) => {
+                    const edited =
+                      evidence?.user_edited_fields.includes(item.field_name) ?? false;
+                    return (
+                      <div
+                        key={item.id}
+                        className={idx === 0 ? "pt-3" : "mt-4 border-t border-slate-100 pt-4"}
+                      >
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-medium text-slate-600">
+                            {FIELD_LABEL[item.field_name] ?? item.field_name}
+                          </p>
+                          {item.confidence !== null && item.confidence < 0.8 && (
+                            <span className="rounded bg-red-100 px-2 py-0.5 text-xs text-red-700">
+                              置信度低，请人工确认
+                            </span>
+                          )}
+                        </div>
 
-                  <p className="mt-2 text-sm text-slate-600">
-                    <span className="ai-badge mr-1">AI</span>
-                    {valueText(item.ai_value, item.field_name)}
-                  </p>
+                        <p className="mt-2 text-sm text-slate-600">
+                          <span className="ai-badge mr-1">AI</span>
+                          {valueText(item.ai_value, item.field_name)}
+                        </p>
 
-                  <label className="mt-2 block text-sm">
-                    <span className="mb-1 block text-slate-500">你的版本</span>
-                    <textarea
-                      className="input"
-                      rows={2}
-                      placeholder={valueText(item.ai_value, item.field_name)}
-                      value={drafts[item.id] ?? ""}
-                      onChange={(e) => setDrafts({ ...drafts, [item.id]: e.target.value })}
-                    />
-                  </label>
+                        <label className="mt-2 block text-sm">
+                          <span className="mb-1 block text-slate-500">你的版本</span>
+                          <textarea
+                            className="input"
+                            rows={2}
+                            placeholder={valueText(item.ai_value, item.field_name)}
+                            value={drafts[item.id] ?? ""}
+                            onChange={(e) => setDrafts({ ...drafts, [item.id]: e.target.value })}
+                          />
+                        </label>
 
-                  {edited && (
-                    <p className="mt-1 text-xs text-emerald-700">
-                      这个字段已由你修改，后续 AI 解析不会覆盖。
-                    </p>
-                  )}
+                        {edited && (
+                          <p className="mt-1 text-xs text-emerald-700">
+                            这个字段已由你修改，后续 AI 解析不会覆盖。
+                          </p>
+                        )}
 
-                  <div className="mt-2 flex gap-2">
-                    <button className="btn-primary" onClick={() => void confirmItem(item)}>
-                      确认
-                    </button>
-                    <button className="btn-ghost" onClick={() => void discardItem(item)}>
-                      忽略
-                    </button>
-                  </div>
+                        <div className="mt-2 flex gap-2">
+                          <button className="btn-primary" onClick={() => void confirmItem(item)}>
+                            确认
+                          </button>
+                          <button className="btn-ghost" onClick={() => void discardItem(item)}>
+                            忽略
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </article>
               );
             })}

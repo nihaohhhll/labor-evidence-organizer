@@ -365,3 +365,22 @@ R6 rq worker、R10 HTTPS、R12 卷权限；无 docker（R1/R2）。
 **测试**：后端 271 全过；前端 `tsc --noEmit` 0 错误 + vitest 23 全过。
 **本轮改动未提交**（openai_provider / registry / config / evidence_gaps /
 analysis 去重 / BackLink / layout / evidence-gaps / files sticky / cases 重写）。
+
+### Q: 案件叙述怎么生成？（AI 生成案件叙述）
+A: 之前 `description` 只是手工字段（测试假数据）。新增 AI 生成链路：
+- `POST /cases/{id}/narrative`（routes/cases.py，同步 def 走线程池，
+  `asyncio.run` 调 LLM，同 analysis 路由契约）→ 汇总证据摘要+时间轴事件
+  构造 prompt（services/narrative.py，事实性、时序、禁法律评价，
+  300-500字）→ `OpenAIProvider.generate_text`（新增自由文本方法，
+  不进 Protocol，缺省即回退）→ kiro :6449 真实生成（~9s）。
+- **只返回草稿不落库**：前端填入 textarea，用户检查后点「保存」走
+  PATCH，AI 永不静默覆盖人工叙述；已有文本时先 confirm。
+- LLM 不可用回退 `template`：按时间排的事件+证据摘要拼接
+  （provider="template"）。无材料 409 NO_MATERIALS。
+- 验证：真实 AI 生成 386 字叙述（读的是库里证据摘要，与上传材料一致）；
+  Playwright 点击→生成→保存→刷新持久化通过；后端 275 测试
+  （新增 3：无材料 409 / 模板路径+不落库 / 越权 404）全过。
+- 同批：导出中心历史导出加「查看」（带 token blob 新标签，
+  headless 验证 %PDF 魔数）/「删除」（DELETE /exports/{id}，
+  删存储对象+审计 EXPORT_DELETED+commit——首版漏 commit 导致
+  204 但行还在，已修）；案件概述页叙述 textarea（≤5000 字实时计数）。

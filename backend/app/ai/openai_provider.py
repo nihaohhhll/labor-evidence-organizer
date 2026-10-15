@@ -97,6 +97,34 @@ class OpenAIProvider:
         self._base_url = (settings.ai_base_url or "http://127.0.0.1:6449").rstrip("/")
         self._api_key = settings.ai_api_key or "free-proxy-key"
 
+    async def generate_text(self, system: str, user: str, *, max_tokens: int = 1024) -> str:
+        """Free-form chat completion (case narrative etc.). Raises on failure.
+
+        Not part of the AIProvider protocol — callers must treat its absence
+        (e.g. the mock provider) as "LLM unavailable" and fall back.
+        """
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "temperature": 0.3,
+            "max_tokens": max_tokens,
+        }
+        async with httpx.AsyncClient(timeout=90.0) as client:
+            resp = await client.post(
+                f"{self._base_url}/v1/chat/completions",
+                json=payload,
+                headers={
+                    "Authorization": f"Bearer {self._api_key}",
+                    "Content-Type": "application/json",
+                },
+            )
+            resp.raise_for_status()
+            body = resp.json()
+        return str(body["choices"][0]["message"]["content"])
+
     async def analyze_document(self, document: DocumentInput) -> DocumentAnalysisResult:
         text = (document.extracted_text or "").strip()
         if not text:
