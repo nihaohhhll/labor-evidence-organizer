@@ -192,6 +192,9 @@ class CaseDetailOut(CaseOut):
     file_count: int = 0
     evidence_count: int = 0
     event_count: int = 0
+    claim_count: int = 0
+    # 庭审准备 working copy (null until the user starts that module).
+    trial_prep: dict | None = None
 
 
 class CaseNarrativeOut(BaseModel):
@@ -593,3 +596,134 @@ class MaterialPackageExportIn(BaseModel):
     format: str = Field(min_length=1, max_length=16)
     snapshot_version: int | None = Field(default=None, ge=1)
     include_gap_appendix: bool = False
+
+
+# ---------- claims (workbench: 仲裁请求) ----------
+
+
+class ClaimOut(ORMModel):
+    id: uuid.UUID
+    case_id: uuid.UUID
+    title: str
+    description: str | None = None
+    amount: str | None = None
+    calculation: str | None = None
+    status: str
+    notes: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class ClaimDetailOut(ClaimOut):
+    evidence_ids: list[uuid.UUID] = []
+    event_ids: list[uuid.UUID] = []
+
+
+class ClaimListOut(BaseModel):
+    claims: list[ClaimDetailOut]
+    total: int
+
+
+class ClaimCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=300)
+    description: str | None = Field(default=None, max_length=4000)
+    amount: str | None = Field(default=None, max_length=64)
+    calculation: str | None = Field(default=None, max_length=4000)
+    notes: str | None = Field(default=None, max_length=4000)
+    evidence_ids: list[uuid.UUID] = []
+    event_ids: list[uuid.UUID] = []
+
+    @field_validator("title")
+    @classmethod
+    def _strip_title(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("仲裁请求名称不能为空")
+        return v
+
+
+class ClaimUpdate(BaseModel):
+    title: str | None = Field(default=None, max_length=300)
+    description: str | None = Field(default=None, max_length=4000)
+    amount: str | None = Field(default=None, max_length=64)
+    calculation: str | None = Field(default=None, max_length=4000)
+    notes: str | None = Field(default=None, max_length=4000)
+    status: str | None = None
+    # None = leave links untouched; [] = clear.
+    evidence_ids: list[uuid.UUID] | None = None
+    event_ids: list[uuid.UUID] | None = None
+
+    @field_validator("title")
+    @classmethod
+    def _strip_title(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        v = v.strip()
+        if not v:
+            raise ValueError("仲裁请求名称不能为空")
+        return v
+
+    @field_validator("status")
+    @classmethod
+    def _valid_status(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        allowed = {"DRAFT", "CONFIRMED"}
+        if v not in allowed:
+            raise ValueError(f"status must be one of {sorted(allowed)}")
+        return v
+
+
+# ---------- trial prep (workbench: 庭审准备) ----------
+
+
+class TrialPrepOut(BaseModel):
+    hearing_date: date | None = None
+    hearing_note: str | None = None
+    mediation_note: str | None = None
+    ruling_note: str | None = None
+    # item_id -> done. Unknown ids are ignored on load.
+    checklist: dict[str, bool] = {}
+    updated_at: datetime | None = None
+
+
+class TrialPrepUpdate(BaseModel):
+    hearing_date: date | None = None
+    hearing_note: str | None = Field(default=None, max_length=4000)
+    mediation_note: str | None = Field(default=None, max_length=4000)
+    ruling_note: str | None = Field(default=None, max_length=4000)
+    checklist: dict[str, bool] | None = None
+
+
+# ---------- progress / audit (workbench: 首页) ----------
+
+
+class ProgressTaskOut(BaseModel):
+    id: str
+    title: str
+    done: bool
+    action_href: str | None = None
+    hint: str | None = None
+
+
+class ProgressOut(BaseModel):
+    case_id: uuid.UUID
+    stage: int
+    stage_label: str
+    counts: dict[str, int]
+    tasks: list[ProgressTaskOut]
+    next_action_href: str | None = None
+
+
+class AuditLogOut(ORMModel):
+    id: uuid.UUID
+    action: str
+    entity_type: str | None = None
+    entity_id: uuid.UUID | None = None
+    metadata_json: dict | None = None
+    created_at: datetime
+
+
+class AuditLogListOut(BaseModel):
+    items: list[AuditLogOut]
+    total: int

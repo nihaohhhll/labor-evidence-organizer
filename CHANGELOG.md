@@ -183,3 +183,44 @@
   文本断言 + 渲染图人工看图通过（`/tmp/leo-pdf-visual/`）。
 - **Phase 9-D 最终封版**（`docs/18` §8）。保持待办：Docker 实跑 / S3 / RQ worker /
   真实 AI Provider / HTTPS / R3 生产守卫（待批）/ Git 提交 / Phase 10。
+
+## [工作台改造] 2026-10-15 — 劳动仲裁案件工作台（docs/19 阶段一~四）
+
+### Added
+- 后端：`GET /cases/{id}/progress`（阶段 0-7 + 12 项真实任务 + 下一步动作，纯计算）；
+  Claims CRUD（`/claims` 与 `/cases/{id}/claims`，金额原文存 + 计算依据 + DRAFT/CONFIRMED，
+  `evidence_ids`/`event_ids` 关联维护与跨案件拒绝）；`GET/PATCH /cases/{id}/trial-prep`
+  （庭审日期 + 6 项清单 + 调裁记录）；`GET /cases/{id}/audit`（暴露 `recent_for_case`）。
+- 迁移 `c8f3a29d1b47`：claims 扩展 4 列 + `claim_events` 连接表 + `cases.trial_prep` JSON，
+  全可空向后兼容（SQLite create_all 同步生效）。
+- 前端：工作台外壳（案件头 + 三组导航 + 移动端折叠）、首页重写（阶段横幅/6 统计卡/
+  待办任务/最近动态）、新页 `/claims` `/trial-prep` `/archive` `/settings`、
+  `components/workbench.tsx` 原语（PageHeader/StageBadge/StatCard/TaskList 等）。
+- 测试：`test_workbench.py` 14 项（CRUD/关联/越权/阶段推进/往返）。
+- 文档：`docs/19`（审查与实施计划）、`docs/20`（最终交付报告）。
+
+### Changed
+- `cases/[id]` 布局与首页重写；存量页内部不动（导航由 layout 统一承担，保护 e2e）。
+- `lib/api.ts` / `lib/types.ts` 新端点封装与类型。
+
+### Notes
+- 验收全绿：pytest **289 passed**（PG + SQLite 双模式）、tsc 0、lint 0、vitest 23、
+  `next build` 通过（含 4 新路由）、`e2e-material-packages.sh` 14 步、Playwright **12/12**、
+  新端点与 12 个页面冒烟 + `/proxy/3001` 用户链路 200。
+- 环境：容器镜像 2026-10-15 重建导致旧 PG 开发库数据丢失（无 dump），.venv/node_modules/
+  Playwright 浏览器已重装；详见 `docs/20` §4-§6。
+- **未做**：任务空态语义调整（见 `docs/20` §5）。
+
+## [证据目录 UX 修复] 2026-10-15 — 动作原地更新，不再整列表重载
+
+### Fixed
+- 证据目录页「确认/保存/重新解析/刷新」不再把整页打回「加载中…」（根因：`load()` 无条件
+  置 loading，动作后 `await load()` 导致列表卸载重建）：确认按接口返回原地翻转单行徽章，
+  保存/重新解析用返回行 `replaceRow()` 原地替换，刷新改 `silent` 静默加载（后台失败仅提示
+  不清屏）；`confirmEvidence` 返回类型收窄为 `EvidenceRow["review_status"]`（端点只会返回 CONFIRMED）。
+
+### Notes
+- 验证：tsc/eslint 0、vitest 23、`/proxy/3001` 证据页 200；Playwright 真实点击 **19 项断言全过**
+  （MutationObserver 证明全程无「加载中…」、卡片 DOM 节点未重建、另一条不受影响、
+  成功与 409 错误路径均不清屏、服务端终态逐条核对），临时案件已删。
+- 同类 `await load()` 闪断模式仍在 review/timeline/files/claims/export/material-packages 页，本次未动。

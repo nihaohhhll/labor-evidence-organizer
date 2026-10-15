@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import ForeignKey, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.types import UUID as PGUUID
+from sqlalchemy.types import JSON, UUID as PGUUID
 
 from app.db import Base
 from app.models.base import SoftDeleteMixin, TimestampMixin, UUIDPk
@@ -46,6 +46,9 @@ class Case(Base, UUIDPk, TimestampMixin, SoftDeleteMixin):
         default=CaseStatus.ACTIVE.value,
         server_default=CaseStatus.ACTIVE.value,
     )
+    # 庭审准备 (workbench): hearing date/notice + user checklist overrides +
+    # mediation/ruling notes. JSON keeps this 1:1 data off a new table.
+    trial_prep: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     owner: Mapped["User"] = relationship(back_populates="cases")
     files: Mapped[list["File"]] = relationship(

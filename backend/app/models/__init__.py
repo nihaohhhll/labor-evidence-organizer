@@ -9,7 +9,7 @@ from app.models.audit import AuditLog
 from app.models.base import SoftDeleteMixin, TimestampMixin, utcnow
 from app.models.case import Case, CaseStatus
 from app.models.case_gap import CaseEvidenceGapResult
-from app.models.claim import Claim
+from app.models.claim import Claim, ClaimEvent, ClaimStatus
 from app.models.event import Event
 from app.models.export import ExportFormat, ExportJob, ExportStatus
 from app.models.evidence import (
@@ -37,6 +37,8 @@ __all__ = [
     "CaseEvidenceGapResult",
     "CaseStatus",
     "Claim",
+    "ClaimEvent",
+    "ClaimStatus",
     "DocumentAnalysis",
     "Event",
     "Evidence",

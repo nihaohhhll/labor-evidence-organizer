@@ -9,6 +9,7 @@ from app.routes import (
     analysis,
     auth,
     cases,
+    claims,
     evidence,
     evidence_gaps,
     export,
@@ -21,6 +22,7 @@ from app.routes import (
 api_router = APIRouter()
 api_router.include_router(auth.router, tags=["auth"])
 api_router.include_router(cases.router, tags=["cases"])
+api_router.include_router(claims.router, tags=["claims"])
 api_router.include_router(files.router, tags=["files"])
 api_router.include_router(analysis.router, tags=["analysis"])
 api_router.include_router(evidence.router, tags=["evidence"])
@@ -35,6 +37,7 @@ __all__ = [
     "api_router",
     "auth",
     "cases",
+    "claims",
     "evidence",
     "evidence_gaps",
     "export",

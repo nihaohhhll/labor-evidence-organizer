@@ -33,19 +33,36 @@ export default function EvidencePage() {
   const [draft, setDraft] = useState<Partial<EvidenceRow>>({});
   const [notice, setNotice] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setState({ kind: "loading" });
-    try {
-      const res = await api.listEvidence(params.id);
-      setState({ kind: "ready", rows: res.evidence });
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
-        router.replace("/login");
-        return;
+  const load = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      // silent：保留当前列表原地换新数据（动作后刷新、手动刷新），
+      // 不把整页打回「加载中…」——那是整列表闪断的根因。
+      if (!opts?.silent) setState({ kind: "loading" });
+      try {
+        const res = await api.listEvidence(params.id);
+        setState({ kind: "ready", rows: res.evidence });
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 401) {
+          router.replace("/login");
+          return;
+        }
+        const message = err instanceof Error ? err.message : "加载失败";
+        if (opts?.silent) {
+          setNotice(message); // 后台刷新失败：提示但不清空现有列表
+          return;
+        }
+        setState({ kind: "error", message });
       }
-      setState({ kind: "error", message: err instanceof Error ? err.message : "加载失败" });
-    }
-  }, [params.id, router]);
+    },
+    [params.id, router],
+  );
+
+  /** 动作成功后只替换受影响的那一行，列表不重挂载、不丢滚动位置。 */
+  function replaceRow(updated: EvidenceRow) {
+    setState((s) =>
+      s.kind === "ready" ? { ...s, rows: s.rows.map((r) => (r.id === updated.id ? updated : r)) } : s,
+    );
+  }
 
   useEffect(() => {
     if (!getToken()) {
@@ -63,14 +80,14 @@ export default function EvidencePage() {
   async function save(row: EvidenceRow) {
     setNotice(null);
     try {
-      await api.updateEvidence(row.id, {
+      const updated = await api.updateEvidence(row.id, {
         title: draft.title ?? row.title,
         summary: draft.summary ?? null,
         proof_purpose: draft.proof_purpose ?? null,
       });
       setEditing(null);
       setNotice("已保存你的修改，后续 AI 解析不会覆盖它。");
-      await load();
+      replaceRow(updated);
     } catch (err) {
       setNotice(err instanceof ApiError ? err.message : "保存失败");
     }
@@ -78,8 +95,9 @@ export default function EvidencePage() {
 
   async function confirm(row: EvidenceRow) {
     try {
-      await api.confirmEvidence(row.id);
-      await load();
+      const res = await api.confirmEvidence(row.id);
+      // 只翻这一条的状态：徽章变「已确认」，「确认」按钮消失，列表不闪断
+      replaceRow({ ...row, review_status: res.review_status });
     } catch (err) {
       setNotice(err instanceof ApiError ? err.message : "确认失败");
     }
@@ -95,7 +113,7 @@ export default function EvidencePage() {
           ? `已重新解析。你修改过的字段（${updated.user_edited_fields.join("、")}）保持不变。`
           : "已重新解析。",
       );
-      await load();
+      replaceRow(updated);
     } catch (err) {
       setNotice(err instanceof ApiError ? err.message : "重新解析失败");
     }
@@ -116,7 +134,7 @@ export default function EvidencePage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">证据目录</h1>
-        <button className="btn-ghost" onClick={() => void load()}>
+        <button className="btn-ghost" onClick={() => void load({ silent: true })}>
           刷新
         </button>
       </div>

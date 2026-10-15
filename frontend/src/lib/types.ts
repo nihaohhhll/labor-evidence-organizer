@@ -27,6 +27,8 @@ export type CaseDetail = CaseSummary & {
   file_count: number;
   evidence_count: number;
   event_count: number;
+  claim_count: number;
+  trial_prep: TrialPrep | null;
 };
 
 export type CaseNarrative = {
@@ -280,4 +282,56 @@ export type MaterialPackageSnapshot = {
 export type MaterialPackageSnapshotList = {
   snapshots: MaterialPackageSnapshot[];
   total: number;
+};
+
+// ---------- workbench (劳动仲裁案件工作台) ----------
+
+export type TrialPrep = {
+  hearing_date: string | null;
+  hearing_note: string | null;
+  mediation_note: string | null;
+  ruling_note: string | null;
+  checklist: Record<string, boolean>;
+  updated_at: string | null;
+};
+
+export type Claim = {
+  id: string;
+  case_id: string;
+  title: string;
+  description: string | null;
+  amount: string | null;
+  calculation: string | null;
+  status: "DRAFT" | "CONFIRMED";
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  evidence_ids: string[];
+  event_ids: string[];
+};
+
+export type ProgressTask = {
+  id: string;
+  title: string;
+  done: boolean;
+  action_href: string | null;
+  hint: string | null;
+};
+
+export type CaseProgress = {
+  case_id: string;
+  stage: number;
+  stage_label: string;
+  counts: Record<string, number>;
+  tasks: ProgressTask[];
+  next_action_href: string | null;
+};
+
+export type AuditEntry = {
+  id: string;
+  action: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  metadata_json: Record<string, unknown> | null;
+  created_at: string;
 };

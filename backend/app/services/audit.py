@@ -52,6 +52,11 @@ class AuditAction:
     MATERIAL_PACKAGE_DELETED = "material_package.deleted"
     # Denying a request is itself security-relevant.
     ACCESS_DENIED = "access.denied"
+    # Workbench phase: claims, trial prep.
+    CLAIM_CREATED = "claim.created"
+    CLAIM_UPDATED = "claim.updated"
+    CLAIM_DELETED = "claim.deleted"
+    TRIAL_PREP_UPDATED = "trial_prep.updated"
 
 
 def record(

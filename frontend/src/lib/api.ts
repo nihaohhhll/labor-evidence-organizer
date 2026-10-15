@@ -233,9 +233,12 @@ export const api = {
   updateEvidence: (id: string, body: Record<string, unknown>) =>
     request<import("./types").EvidenceRow>(`/evidence/${id}`, { method: "PATCH", body }),
   confirmEvidence: (id: string) =>
-    request<{ id: string; review_status: string }>(`/evidence/${id}/confirm`, {
-      method: "POST",
-    }),
+    request<{ id: string; review_status: import("./types").EvidenceRow["review_status"] }>(
+      `/evidence/${id}/confirm`,
+      {
+        method: "POST",
+      },
+    ),
   reanalyzeEvidence: (id: string) =>
     request<import("./types").EvidenceRow>(`/evidence/${id}/reanalyze`, { method: "POST" }),
 
@@ -365,5 +368,47 @@ export const api = {
   listMaterialPackageExports: (id: string, limit = 100, offset = 0) =>
     request<{ exports: import("./types").ExportJob[]; total: number }>(
       `/material-packages/${id}/exports?limit=${limit}&offset=${offset}`,
+    ),
+
+  // ---------- workbench ----------
+
+  getProgress: (caseId: string) =>
+    request<import("./types").CaseProgress>(`/cases/${caseId}/progress`),
+
+  listClaims: (caseId: string) =>
+    request<{ claims: import("./types").Claim[]; total: number }>(`/cases/${caseId}/claims`),
+
+  createClaim: (
+    caseId: string,
+    body: {
+      title: string;
+      description?: string | null;
+      amount?: string | null;
+      calculation?: string | null;
+      notes?: string | null;
+      evidence_ids?: string[];
+      event_ids?: string[];
+    },
+  ) => request<import("./types").Claim>(`/cases/${caseId}/claims`, { method: "POST", body }),
+
+  getClaim: (id: string) => request<import("./types").Claim>(`/claims/${id}`),
+
+  updateClaim: (id: string, body: Record<string, unknown>) =>
+    request<import("./types").Claim>(`/claims/${id}`, { method: "PATCH", body }),
+
+  deleteClaim: (id: string) => request<void>(`/claims/${id}`, { method: "DELETE" }),
+
+  getTrialPrep: (caseId: string) =>
+    request<import("./types").TrialPrep>(`/cases/${caseId}/trial-prep`),
+
+  updateTrialPrep: (caseId: string, body: Record<string, unknown>) =>
+    request<import("./types").TrialPrep>(`/cases/${caseId}/trial-prep`, {
+      method: "PATCH",
+      body,
+    }),
+
+  listCaseAudit: (caseId: string, limit = 20) =>
+    request<{ items: import("./types").AuditEntry[]; total: number }>(
+      `/cases/${caseId}/audit?limit=${limit}`,
     ),
 };
