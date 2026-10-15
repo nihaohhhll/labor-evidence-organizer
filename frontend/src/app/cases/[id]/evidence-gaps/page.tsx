@@ -25,7 +25,7 @@ export default function EvidenceGapsPage() {
   const [state, setState] = useState<ViewState>({ kind: "loading" });
   const [latest, setLatest] = useState<EvidenceGapResult | null>(null);
   const [history, setHistory] = useState<EvidenceGapResult[]>([]);
-  const [viewing, setViewing] = useState<EvidenceGapResult | null>(null);
+  const [selectedId, setSelectedId] = useState<string>("latest");
   const [analyzing, setAnalyzing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -77,7 +77,7 @@ export default function EvidenceGapsPage() {
     try {
       const res = await api.triggerEvidenceGaps(params.id);
       setLatest(res);
-      setViewing(null);
+      setSelectedId("latest");
       setNotice(`分析完成（版本 ${res.version}，${missingCount(res)} 项缺口）`);
       await loadHistory();
     } catch (err) {
@@ -100,7 +100,11 @@ export default function EvidenceGapsPage() {
     );
   }
 
-  const displayed = viewing ?? latest;
+  // Resolve which result to display from the dropdown selection.
+  const displayed =
+    selectedId === "latest"
+      ? latest
+      : history.find((r) => r.id === selectedId) ?? latest;
 
   return (
     <div className="space-y-4">
@@ -134,133 +138,114 @@ export default function EvidenceGapsPage() {
           暂无缺口分析结果。点击「开始分析」生成最新版本。
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3">
+          {/* Header card: version info + history dropdown */}
           <div className="card">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-slate-500">
-                  {viewing ? "查看历史版本" : "最新版本"}
-                </p>
+              <div className="flex items-center gap-3">
                 <p className="text-lg font-semibold">v{displayed.version}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                {viewing && (
-                  <button
-                    className="btn-ghost"
-                    onClick={() => setViewing(null)}
-                  >
-                    回到最新
-                  </button>
-                )}
                 <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
                   {displayed.status}
                 </span>
+                <span className="text-xs text-slate-400">
+                  {missingCount(displayed)} 项缺口
+                </span>
+                <span className="text-xs text-slate-400">
+                  {new Date(displayed.created_at).toLocaleString("zh-CN")}
+                </span>
               </div>
-            </div>
-            <p className="mt-2 text-xs text-slate-400">
-              分析时间：
-              {new Date(displayed.created_at).toLocaleString("zh-CN")}
-            </p>
-          </div>
-
-          {(displayed.gap_json?.missing_items?.length ?? 0) === 0 ? (
-            <div className="empty-state">未发现材料缺口。</div>
-          ) : (
-            <div className="space-y-3">
-              {displayed.gap_json?.missing_items.map((item, idx) => {
-                const basis = describeCheckBasis(item.check_basis);
-                const facts = shortFactIds(item);
-                return (
-                  <div key={item.gap_id || idx} className="card space-y-2">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h3 className="font-medium">{item.title}</h3>
-                        <p className="mt-1 text-sm text-slate-600">
-                          {item.description}
-                        </p>
-                      </div>
-                      <span className="rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
-                        {priorityLabel(item.priority)}
-                      </span>
-                    </div>
-
-                    {item.suggested_evidence_types.length > 0 && (
-                      <div className="text-xs text-slate-500">
-                        建议证据类型：
-                        {suggestedTypeLabels(item.suggested_evidence_types)}
-                      </div>
-                    )}
-
-                    {item.sources.length > 0 && (
-                      <div className="space-y-1">
-                        <p className="text-xs font-medium text-slate-500">
-                          来源
-                        </p>
-                        {item.sources.map((src, sidx) => (
-                          <p
-                            key={`${src.kind}-${src.id}-${sidx}`}
-                            className="rounded bg-slate-50 px-2 py-1 text-xs text-slate-600"
-                          >
-                            {describeSource(src)}
-                          </p>
-                        ))}
-                      </div>
-                    )}
-
-                    {facts.length > 0 && (
-                      <div className="text-xs text-slate-500">
-                        关联事实：{facts.join("、")}
-                      </div>
-                    )}
-
-                    {basis && (
-                      <p className="text-xs text-slate-400">
-                        搜索依据：{basis}
-                      </p>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="card">
-        <h2 className="font-medium">历史版本</h2>
-        {history.length === 0 ? (
-          <p className="mt-2 text-sm text-slate-500">尚无分析记录。</p>
-        ) : (
-          <ul className="mt-2 divide-y divide-slate-100">
-            {history.map((row) => (
-              <li
-                key={row.id}
-                className="flex items-center justify-between py-2 text-sm"
-              >
-                <div>
-                  <span className="font-medium">v{row.version}</span>
-                  <span className="ml-2 text-xs text-slate-500">
-                    {missingCount(row)} 项缺口 · {row.status}
-                  </span>
-                  <span className="ml-2 text-xs text-slate-400">
-                    {new Date(row.created_at).toLocaleString("zh-CN")}
-                  </span>
-                </div>
-                <button
-                  className="btn-ghost"
-                  onClick={() => {
-                    setViewing(row);
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-slate-500" htmlFor="gap-version-select">
+                  历史版本
+                </label>
+                <select
+                  id="gap-version-select"
+                  className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
+                  value={selectedId}
+                  onChange={(e) => {
+                    setSelectedId(e.target.value);
                     setNotice(null);
                   }}
-                  disabled={viewing?.id === row.id}
                 >
-                  {viewing?.id === row.id ? "查看中" : "查看"}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+                  <option value="latest">
+                    最新版本{latest ? ` (v${latest.version})` : ""}
+                  </option>
+                  {history.map((row) => (
+                    <option key={row.id} value={row.id}>
+                      v{row.version} · {missingCount(row)} 项缺口 ·{" "}
+                      {new Date(row.created_at).toLocaleString("zh-CN")}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Results */}
+          <div>
+            {(displayed.gap_json?.missing_items?.length ?? 0) === 0 ? (
+              <div className="empty-state">未发现材料缺口。</div>
+            ) : (
+              <div className="space-y-3">
+                {displayed.gap_json?.missing_items.map((item, idx) => {
+                  const basis = describeCheckBasis(item.check_basis);
+                  const facts = shortFactIds(item);
+                  return (
+                    <div key={item.gap_id || idx} className="card space-y-2">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h3 className="font-medium">{item.title}</h3>
+                          <p className="mt-1 text-sm text-slate-600">
+                            {item.description}
+                          </p>
+                        </div>
+                        <span className="rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
+                          {priorityLabel(item.priority)}
+                        </span>
+                      </div>
+
+                      {item.suggested_evidence_types.length > 0 && (
+                        <div className="text-xs text-slate-500">
+                          建议证据类型：
+                          {suggestedTypeLabels(item.suggested_evidence_types)}
+                        </div>
+                      )}
+
+                      {item.sources.length > 0 && (
+                        <div className="space-y-1">
+                          <p className="text-xs font-medium text-slate-500">
+                            来源
+                          </p>
+                          {item.sources.map((src, sidx) => (
+                            <p
+                              key={`${src.kind}-${src.id}-${sidx}`}
+                              className="rounded bg-slate-50 px-2 py-1 text-xs text-slate-600"
+                            >
+                              {describeSource(src)}
+                            </p>
+                          ))}
+                        </div>
+                      )}
+
+                      {facts.length > 0 && (
+                        <div className="text-xs text-slate-500">
+                          关联事实：{facts.join("、")}
+                        </div>
+                      )}
+
+                      {basis && (
+                        <p className="text-xs text-slate-400">
+                          搜索依据：{basis}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

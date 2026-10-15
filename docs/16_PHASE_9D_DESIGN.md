@@ -313,3 +313,55 @@ code-server `/proxy/3000/` 前缀路径坏。
 **可访问 URL**：`https://lldakjd-aa.hf.space/proxy/3001/`
 
 **边界**：不进 Phase 10；Docker 实跑 / S3 / RQ / 真实 AI Provider 仍待办。
+
+---
+
+## 追加记录（2026-10-14 会话：真实 AI 接入 + 布局改造）
+
+### Q: Modal API 返回 `missing forward secret`，怎么接入真实 AI？
+A: Modal 的 Envoy 代理层强制 mTLS，不可绕过；HF token 无推理权限；
+`ANTHROPIC_BASE_URL=ai2.hhhl.cc` 返回 521。最终方案：本地 kiro 免费代理
+（`/root/.openclaw/workspace/opencode-kiro-freeapi/server.mjs`，:6449，
+key `free-proxy-key`，28 个免费模型）。后端新增 `OpenAIProvider`
+（`backend/app/ai/openai_provider.py`）适配 OpenAI 兼容接口，遵循
+docs/08_PROMPT_SPEC 的中文 JSON schema prompt，失败回退 MockAIProvider。
+`.env`：`AI_PROVIDER=openai`、`AI_BASE_URL=http://127.0.0.1:6449`、
+`AI_MODEL=kilo-auto/free`。两个案件（张伟 10 文件、a公司 1 文件）均真实 AI 分析成功；
+PNG 无文本层走 mock 兜底。上游偶发 502 会触发回退，需重跑分析。
+
+### Q: 上传同一文件再次分析会产生重复证据吗？
+A: 会。修复：`analysis.py` 的 `suggest_evidence_from_analysis` 按
+`source_file_id` 查最新 Evidence，存在则更新（用 `edited_fields` 属性保护
+用户已编辑字段），不新建行。中文日期（如"2022年3月1日"）解析为 ISO。
+
+### Q: 案件缺材料时缺口引擎能否检出？
+A: 可以。`evidence_gaps.py` 的 `_FACT_PATTERNS` 增加叙述文格式正则
+（`入职时间[：:为是]`、"于X年X月X日入职"、"月工资X元"等）。
+a公司违法解除案件（1 份聊天记录）检出 **5 项缺口**：入职时间/合同开始
+时间/岗位/用人单位/薪资，UI 显示完整来源与搜索依据。张伟案 0 缺口是
+正确结果（3 facts 全被覆盖，证据齐全）。
+
+### Q: 案件子页面滚动体验怎么统一？
+A: 新建 `cases/[id]/layout.tsx`：左侧常驻侧边栏（概览/资料库/审核工作台/
+时间轴/证据目录/材料缺口/材料包/导出中心 + BackLink 返回案件列表），
+内容区 `h-[calc(100vh-120px)] overflow-y-auto` 统一容器内滚动。
+各子页面不再各自滚动，避免双滚动条。
+
+### Q: 资料库上传区被滚动带走怎么办？
+A: 把标题+上传区+通知条包进 `sticky top-0 z-10 bg-white` 容器，
+文件列表在其下方独立滚动。Playwright 滚动 600px 后上传区仍固定在
+y=135，验证通过。
+
+### Q: 材料缺口页历史版本怎么切换？
+A: 底部列表改为顶部下拉框 `#gap-version-select`（"最新版本 (vN)" +
+历史版本），`selectedId` state 控制，结果区在统一滚动容器内。
+
+### Q: 平台侧（HF Spaces）还有什么遗留？
+A: 3002 前端进程曾挂死导致"一直显示加载中"，已重启修复
+（`setsid nohup ... < /dev/null &` 后台启动 + 轮询验证）。
+kiro 代理当前手动启动，可做开机自启。待批项不变：R3 SECRET_KEY、
+R6 rq worker、R10 HTTPS、R12 卷权限；无 docker（R1/R2）。
+
+**测试**：后端 271 全过；前端 `tsc --noEmit` 0 错误 + vitest 23 全过。
+**本轮改动未提交**（openai_provider / registry / config / evidence_gaps /
+analysis 去重 / BackLink / layout / evidence-gaps / files sticky / cases 重写）。

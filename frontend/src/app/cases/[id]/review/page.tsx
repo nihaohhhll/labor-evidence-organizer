@@ -26,9 +26,10 @@ function valueText(v: Record<string, string | null> | null, field: string): stri
 /**
  * 审核工作台 (docs/09 FRONTEND_SPEC).
  *
- * Desktop: the original file on the left, the structured result on the right.
- * Mobile: stacked. The AI value and the user's value are always shown
- * side by side so a human can see exactly what they are changing.
+ * The original file is rendered as its own full-width section, deliberately
+ * kept out of the evidence-list container below it. The AI value and the
+ * user's value are always shown side by side so a human can see exactly what
+ * they are changing.
  */
 export default function ReviewPage() {
   const params = useParams<{ id: string }>();
@@ -152,50 +153,54 @@ export default function ReviewPage() {
       {state.items.length === 0 ? (
         <div className="empty-state">没有待确认的 AI 建议。</div>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
-          {/* Left: original material */}
-          <section className="card">
-            <h2 className="mb-2 text-sm font-semibold text-slate-600">原始材料</h2>
-            {activeFileId ? (
-              <>
-                {previewUrl ? (
-                  <iframe
-                    title="原始材料"
-                    src={previewUrl}
-                    className="h-96 w-full rounded border border-slate-200"
-                  />
-                ) : (
-                  <p className="text-sm text-slate-500">加载预览中…</p>
-                )}
-                <button
-                  className="mt-2 inline-block text-sm text-slate-500 underline"
-                  onClick={() => {
-                    if (previewUrl) window.open(previewUrl, "_blank", "noreferrer");
-                  }}
-                  disabled={!previewUrl}
-                >
-                  在新标签打开
-                </button>
-              </>
-            ) : (
-              <p className="text-sm text-slate-500">没有可预览的原始材料。</p>
-            )}
-            {sourceFiles.length > 1 && (
-              <select
-                className="input mt-2"
-                value={activeFileId ?? ""}
-                onChange={(e) => setActiveFileId(e.target.value)}
-              >
-                {sourceFiles.map((fid) => (
-                  <option key={fid} value={fid}>
-                    文件 {fid.slice(0, 8)}…
-                  </option>
-                ))}
-              </select>
-            )}
-          </section>
+        <>
+          {/* Original material — sticky at top, outside the scrolling evidence list */}
+          <div className="sticky top-0 z-10 -mx-1 bg-white px-1 pb-2 pt-1">
+            <section className="card">
+              <h2 className="mb-2 text-sm font-semibold text-slate-600">原始材料</h2>
+              {activeFileId ? (
+                <>
+                  {previewUrl ? (
+                    <iframe
+                      title="原始材料"
+                      src={previewUrl}
+                      className="h-64 w-full rounded border border-slate-200"
+                    />
+                  ) : (
+                    <p className="text-sm text-slate-500">加载预览中…</p>
+                  )}
+                  <div className="mt-2 flex items-center justify-between">
+                    <button
+                      className="inline-block text-sm text-slate-500 underline"
+                      onClick={() => {
+                        if (previewUrl) window.open(previewUrl, "_blank", "noreferrer");
+                      }}
+                      disabled={!previewUrl}
+                    >
+                      在新标签打开
+                    </button>
+                    {sourceFiles.length > 1 && (
+                      <select
+                        className="input w-auto"
+                        value={activeFileId ?? ""}
+                        onChange={(e) => setActiveFileId(e.target.value)}
+                      >
+                        {sourceFiles.map((fid) => (
+                          <option key={fid} value={fid}>
+                            文件 {fid.slice(0, 8)}…
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-slate-500">没有可预览的原始材料。</p>
+              )}
+            </section>
+          </div>
 
-          {/* Right: structured result */}
+          {/* Evidence list (structured result) */}
           <section className="space-y-3">
             <h2 className="text-sm font-semibold text-slate-600">AI 结果与人工修改</h2>
             {state.items.map((item) => {
@@ -249,7 +254,7 @@ export default function ReviewPage() {
               );
             })}
           </section>
-        </div>
+        </>
       )}
     </div>
   );

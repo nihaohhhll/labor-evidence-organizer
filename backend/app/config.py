@@ -67,6 +67,7 @@ class Settings(BaseSettings):
     ai_provider: str = "mock"
     ai_api_key: str = ""
     ai_model: str = ""
+    ai_base_url: str = ""
     ocr_provider: str = "mock"
     ocr_api_key: str = ""
     prompt_version: str = "evidence-extraction-v1"

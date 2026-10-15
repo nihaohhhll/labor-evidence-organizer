@@ -7,12 +7,13 @@ business code never imports a vendor SDK (docs/04_TECH_ARCHITECTURE.md).
 from __future__ import annotations
 
 from app.ai.mock import MockAIProvider, MockOCRProvider
+from app.ai.openai_provider import OpenAIProvider
 from app.ai.providers import AIProvider, OCRProvider, ProviderNotFound
 from app.config import settings
 
 _AI_PROVIDERS: dict[str, type] = {
     "mock": MockAIProvider,
-    # "openai": OpenAIProvider,     # add when a real key is available
+    "openai": OpenAIProvider,
     # "anthropic": AnthropicProvider,
 }
 

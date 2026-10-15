@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ApiError, api } from "@/lib/api";
@@ -11,7 +10,7 @@ type ViewState =
   | { kind: "error"; message: string }
   | { kind: "ready"; data: CaseDetail };
 
-/** Case dashboard: counts + navigation to each work area (03_FUNCTIONAL_SPEC §1). */
+/** Case dashboard: counts + quick status (navigation lives in the sidebar layout). */
 export default function CaseDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -69,22 +68,6 @@ export default function CaseDetailPage() {
             <div className="text-2xl font-semibold">{s.value}</div>
             <div className="text-sm text-slate-500">{s.label}</div>
           </div>
-        ))}
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-3">
-        {[
-          { href: `/cases/${c.id}/files`, label: "资料库" },
-          { href: `/cases/${c.id}/review`, label: "AI 审核工作台" },
-          { href: `/cases/${c.id}/timeline`, label: "案件时间轴" },
-          { href: `/cases/${c.id}/evidence`, label: "证据目录" },
-          { href: `/cases/${c.id}/evidence-gaps`, label: "材料缺口（A3）" },
-          { href: `/cases/${c.id}/material-packages`, label: "材料包" },
-          { href: `/cases/${c.id}/export`, label: "导出中心" },
-        ].map((l) => (
-          <Link key={l.href} href={l.href} className="card hover:border-slate-400">
-            {l.label}
-          </Link>
         ))}
       </div>
 

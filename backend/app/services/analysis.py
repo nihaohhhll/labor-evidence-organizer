@@ -152,15 +152,49 @@ def suggest_evidence_from_analysis(
     treated as a fact (docs/07 step 6, docs/14 法律相关).
     """
     structured = analysis.structured_json or {}
+
+    # Re-analysis must not create a second row for the same source file —
+    # update the existing suggestion instead (user edits are preserved via
+    # user_edited_fields; only unedited fields get the new AI values).
+    if file is not None:
+        existing = db.scalar(
+            select(Evidence)
+            .where(Evidence.case_id == case_id, Evidence.source_file_id == file.id)
+            .order_by(Evidence.created_at.desc())
+            .limit(1)
+        )
+        if existing is not None:
+            edited = set(existing.edited_fields)
+            existing.analysis_id = analysis.id
+            existing.confidence = analysis.confidence
+            if "summary" not in edited:
+                existing.summary = structured.get("summary") or existing.summary
+            if "proof_purpose" not in edited:
+                existing.proof_purpose = structured.get("proof_purpose") or existing.proof_purpose
+            if analysis.classification and "category" not in edited:
+                existing.category = analysis.classification
+            db.flush()
+            _queue_review_items(db, case_id, existing, analysis)
+            return existing
+
     event_date = None
     dates = structured.get("dates") or []
     if dates:
         from datetime import date as _date
 
+        raw = str(dates[0]).strip()
         try:
-            event_date = _date.fromisoformat(str(dates[0]))
+            event_date = _date.fromisoformat(raw)
         except ValueError:
-            event_date = None
+            # AI may return Chinese dates: 2022年3月1日 / 2026年8月
+            import re as _re
+
+            m = _re.match(r"(\d{4})[-年/](\d{1,2})[-月/](\d{1,2})", raw)
+            if m:
+                try:
+                    event_date = _date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+                except ValueError:
+                    event_date = None
 
     title = f"{analysis.classification or '材料'}—{(file.original_filename if file else '未命名')}"
     evidence = Evidence(

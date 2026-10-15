@@ -154,68 +154,72 @@ export default function CaseFilesPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">资料库</h1>
-        <div className="flex gap-2">
-          <button className="btn-ghost" onClick={() => void load()}>
-            刷新
-          </button>
-          <button
-            className="btn-primary"
-            onClick={() => void onAnalyzeAll()}
-            disabled={analyzing || files.length === 0}
-          >
-            {analyzing ? "解析中…" : "全部解析"}
-          </button>
+      {/* Sticky header: always visible while the file list scrolls */}
+      <div className="sticky top-0 z-10 -mx-1 space-y-4 bg-white px-1 pb-2 pt-1">
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-semibold">资料库</h1>
+          <div className="flex gap-2">
+            <button className="btn-ghost" onClick={() => void load()}>
+              刷新
+            </button>
+            <button
+              className="btn-primary"
+              onClick={() => void onAnalyzeAll()}
+              disabled={analyzing || files.length === 0}
+            >
+              {analyzing ? "解析中…" : "全部解析"}
+            </button>
+          </div>
         </div>
-      </div>
 
-      {/* Drop zone */}
-      <div
-        className={`empty-state cursor-pointer ${dragging ? "border-slate-900 bg-slate-100" : ""}`}
-        onClick={() => inputRef.current?.click()}
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragging(true);
-        }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setDragging(false);
-          void handleFiles(e.dataTransfer.files);
-        }}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") inputRef.current?.click();
-        }}
-      >
-        {uploading ? (
-          "上传中…"
-        ) : (
-          <>
-            把合同、聊天截图、工资记录等资料拖进来，AI 会先帮你整理。
-            <p className="mt-2 text-xs text-slate-400">
-              支持 PNG / JPG / PDF / DOCX / TXT，单个文件不超过 25 MB
-            </p>
-          </>
+        {/* Drop zone */}
+        <div
+          className={`empty-state cursor-pointer ${dragging ? "border-slate-900 bg-slate-100" : ""}`}
+          onClick={() => inputRef.current?.click()}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragging(false);
+            void handleFiles(e.dataTransfer.files);
+          }}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") inputRef.current?.click();
+          }}
+        >
+          {uploading ? (
+            "上传中…"
+          ) : (
+            <>
+              把合同、聊天截图、工资记录等资料拖进来，AI 会先帮你整理。
+              <p className="mt-2 text-xs text-slate-400">
+                支持 PNG / JPG / PDF / DOCX / TXT，单个文件不超过 25 MB
+              </p>
+            </>
+          )}
+          <input
+            ref={inputRef}
+            type="file"
+            multiple
+            className="hidden"
+            accept=".png,.jpg,.jpeg,.pdf,.docx,.txt"
+            onChange={onInputChange}
+          />
+        </div>
+
+        {notice && (
+          <p className="rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-700" role="status">
+            {notice}
+          </p>
         )}
-        <input
-          ref={inputRef}
-          type="file"
-          multiple
-          className="hidden"
-          accept=".png,.jpg,.jpeg,.pdf,.docx,.txt"
-          onChange={onInputChange}
-        />
       </div>
 
-      {notice && (
-        <p className="rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-700" role="status">
-          {notice}
-        </p>
-      )}
-
+      {/* Scrollable file list */}
       {files.length === 0 ? (
         <div className="empty-state">还没有资料。</div>
       ) : (
