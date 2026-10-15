@@ -136,7 +136,7 @@ export default function ReviewPage() {
     .filter((v): v is string => Boolean(v));
 
   return (
-    <div className="space-y-4">
+    <div className="flex h-full flex-col space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">AI 审核工作台</h1>
         <button className="btn-ghost" onClick={() => void load()}>
@@ -153,55 +153,53 @@ export default function ReviewPage() {
       {state.items.length === 0 ? (
         <div className="empty-state">没有待确认的 AI 建议。</div>
       ) : (
-        <>
-          {/* Original material — sticky at top, outside the scrolling evidence list */}
-          <div className="sticky top-0 z-10 -mx-1 bg-white px-1 pb-2 pt-1">
-            <section className="card">
-              <h2 className="mb-2 text-sm font-semibold text-slate-600">原始材料</h2>
-              {activeFileId ? (
-                <>
-                  {previewUrl ? (
-                    <iframe
-                      title="原始材料"
-                      src={previewUrl}
-                      className="h-64 w-full rounded border border-slate-200"
-                    />
-                  ) : (
-                    <p className="text-sm text-slate-500">加载预览中…</p>
-                  )}
-                  <div className="mt-2 flex items-center justify-between">
-                    <button
-                      className="inline-block text-sm text-slate-500 underline"
-                      onClick={() => {
-                        if (previewUrl) window.open(previewUrl, "_blank", "noreferrer");
-                      }}
-                      disabled={!previewUrl}
+        <div className="grid min-h-0 flex-1 grid-cols-[24rem_1fr] gap-4">
+          {/* Original material — fixed left column, outside the evidence list */}
+          <section className="card self-start">
+            <h2 className="mb-2 text-sm font-semibold text-slate-600">原始材料</h2>
+            {activeFileId ? (
+              <>
+                {previewUrl ? (
+                  <iframe
+                    title="原始材料"
+                    src={previewUrl}
+                    className="h-96 w-full rounded border border-slate-200"
+                  />
+                ) : (
+                  <p className="text-sm text-slate-500">加载预览中…</p>
+                )}
+                <div className="mt-2 flex items-center justify-between">
+                  <button
+                    className="inline-block text-sm text-slate-500 underline"
+                    onClick={() => {
+                      if (previewUrl) window.open(previewUrl, "_blank", "noreferrer");
+                    }}
+                    disabled={!previewUrl}
+                  >
+                    在新标签打开
+                  </button>
+                  {sourceFiles.length > 1 && (
+                    <select
+                      className="input w-auto"
+                      value={activeFileId ?? ""}
+                      onChange={(e) => setActiveFileId(e.target.value)}
                     >
-                      在新标签打开
-                    </button>
-                    {sourceFiles.length > 1 && (
-                      <select
-                        className="input w-auto"
-                        value={activeFileId ?? ""}
-                        onChange={(e) => setActiveFileId(e.target.value)}
-                      >
-                        {sourceFiles.map((fid) => (
-                          <option key={fid} value={fid}>
-                            文件 {fid.slice(0, 8)}…
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <p className="text-sm text-slate-500">没有可预览的原始材料。</p>
-              )}
-            </section>
-          </div>
+                      {sourceFiles.map((fid) => (
+                        <option key={fid} value={fid}>
+                          文件 {fid.slice(0, 8)}…
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-slate-500">没有可预览的原始材料。</p>
+            )}
+          </section>
 
-          {/* Evidence list (structured result) */}
-          <section className="space-y-3">
+          {/* Evidence list — right column, scrolls independently */}
+          <section className="min-h-0 space-y-3 overflow-y-auto pr-1">
             <h2 className="text-sm font-semibold text-slate-600">AI 结果与人工修改</h2>
             {state.items.map((item) => {
               const evidence = state.evidence.find((e) => e.id === item.entity_id);
@@ -254,7 +252,7 @@ export default function ReviewPage() {
               );
             })}
           </section>
-        </>
+        </div>
       )}
     </div>
   );
