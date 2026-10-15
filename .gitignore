@@ -35,3 +35,10 @@ derived/
 
 # Logs
 *.log
+
+# Portable build output
+dist/
+
+# Scratch sqlite file
+backend/leo.db
+backend/leo.db-*

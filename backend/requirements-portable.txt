@@ -1,0 +1,31 @@
+# Runtime dependencies for the Windows portable build (SQLite backend).
+# Pinned to the versions the test suite ran against (PG + SQLite, 275 passed).
+# Differences from requirements.txt:
+#   - psycopg omitted: portable runs on SQLite
+#   - alembic omitted: first start creates the schema via create_all()
+#   - pytest tooling omitted: tests are not shipped
+#   - uvicorn[standard] extra omitted: uvloop has no Windows wheels and pip
+#     evaluates environment markers against the build host (Linux)
+#   - passlib omitted here: sdist-only on PyPI (pip forbids sdist builds in
+#     cross mode) — scripts/build-portable.sh wheels it locally first
+# Cross-installed with:
+#   pip install --platform win_amd64 --python-version 3.11 --implementation cp \
+#     --only-binary=:all: --target <site-packages> -r this-file
+
+fastapi==0.143.0
+uvicorn==0.54.0
+sqlalchemy==2.1.4
+pydantic==2.14.1
+pydantic-settings==2.15.0
+email-validator==2.3.0
+python-multipart==0.0.32
+bcrypt==4.1.3
+PyJWT==2.15.1
+httpx==0.28.1
+
+# Phase 3 parsing / AI
+python-docx==1.2.0
+pymupdf==1.28.2
+reportlab==5.0.1
+pillow==12.3.0
+python-magic==0.4.27

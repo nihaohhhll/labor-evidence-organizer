@@ -384,3 +384,53 @@ A: 之前 `description` 只是手工字段（测试假数据）。新增 AI 生�
   headless 验证 %PDF 魔数）/「删除」（DELETE /exports/{id}，
   删存储对象+审计 EXPORT_DELETED+commit——首版漏 commit 导致
   204 但行还在，已修）；案件概述页叙述 textarea（≤5000 字实时计数）。
+
+### Q: 能出 Windows 绿色免安装版吗？（便携版打包）
+A: 可以。选型：**绿色便携版优先**（解压即用、自选目录=解压位置、
+数据全在包内 data/），一键安装包（Inno Setup）留作后续。
+技术路线：embeddable Python 3.11.9 + Windows node.exe + next standalone，
+在 Linux 上构建出 `dist/labor-evidence-portable-0.1.0-win64.zip`
+（97 MiB，8529 文件）。
+
+**SQLite 兼容改造**（SQLite/PG 双库测试均 275 全过）：
+- `db.py`：连接级 PRAGMA（`foreign_keys=ON`——SQLite 默认关，级联删除会
+  静默失效；`busy_timeout=5000`；`journal_mode=WAL`）+ `check_same_thread=False`；
+  `create_schema()` 在 SQLite 建表时剥掉 `UNIQUE ... DEFERRABLE`
+  （SQLite 不支持表级 deferrable，PG 走 alembic 不受影响）。
+- `save_items()` 两阶段编号：先全部挪临时位（+1,000,000）再落 1..N——
+  SQLite 逐语句即时查 UNIQUE，编号互换（1↔2）中途会撞车（PG 靠
+  DEFERRED UNIQUE 挡住了这个）。
+- `TimestampMixin` 改 Python 侧 `utcnow()`：SQLite `CURRENT_TIMESTAMP`
+  仅秒级精度，同秒内快照变更检测不出 CHANGED；微秒精度两库一致。
+- `export.py` Boolean `server_default` 改 `text("false")`（裸关键字，
+  引号文本会被 SQLite 存成 'false' 字符串）。
+- `conftest.py`：PG 专属 `TRUNCATE ... CASCADE` 在 SQLite 下改逆序 DELETE。
+- 实测：无 PG 专属 SQL/fcntl 等平台绑定；python-magic 是 optional
+  （无 libmagic DLL 自动降级）。
+
+**打包脚本**（scripts/）：
+- `build-portable.sh`：下载缓存官方 runtime → 改 `_pth` 启用
+  `Lib\site-packages`+`import site` → pip 交叉装 win_amd64 wheels
+  （`requirements-portable.txt`：pin 实测版本、去 psycopg/alembic/pytest/
+  `uvicorn[standard]`——uvloop 无 win 轮子且 pip 环境标记按构建宿主求值；
+  passlib 是 sdist-only，先本地 `pip wheel` 再装）→ `next build`
+  （`output:"standalone"` + `NEXT_DIST_DIR=.next-portable` 隔离 dev 的
+  `.next`；**static 必须拷到 server/.next-portable/static**——server.js
+  内嵌构建时 distDir，常规 .next/static 做法只适用于默认 distDir）→
+  生成 `.env`（production + 随机 SECRET_KEY + sqlite 相对路径 + mock AI
+  注释模板）→ 4 个 bat + README → zip。
+- `portable-smoke-test.sh`：宿主 python+node 跑同一 stage 树
+  （包内 runtime 是 win 构建），首次建库→healthz→注册/登录/建案→
+  登录页+`_next/static` 200；临时接管 8000/3000，结束自动恢复 dev。
+  **两次踩坑**：① 密码策略禁键盘/数字序列（`smoke-test-pass-123` 被 422，
+  换 `correct-horse-battery`）；② `pkill -f` 模式若出现在执行命令行里会
+  自杀（脚本内执行无此问题，交互命令须用 `app[.]main` 括号技巧）。
+- `start.bat`（幂等：先 stop 再起 + 首次 create_all + 开浏览器）/
+  `start-backend.bat`、`start-frontend.bat`（嵌套引号地狱的替代）/
+  `stop.bat`（netstat 按端口杀，尾随空格防误伤 30001）/
+  `README.txt`（用户向）+ `README_技术说明.md`（构建者向）。
+
+**验证**：build 两轮 exit 0；smoke 两轮 SMOKE OK；zip 抽验
+（.env 随机密钥、_pth、uvicorn/passlib、node.exe、static 全在）；
+dev 服务恢复 healthz ok + web 200。**Windows 实机未测**（bat/embed/
+taskkill 按官方文档行为编写），需在真机跑 start→注册→上传→导出全链路。

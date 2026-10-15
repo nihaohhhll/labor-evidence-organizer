@@ -37,6 +37,9 @@ from app.models.material_package import (
 )
 
 _MAX_ITEMS_PER_PACKAGE = 200
+# Out-of-band parking spot for the two-phase reorder (see save_items):
+# final positions are 1..N, temp positions are always > N and unique.
+_TEMP_POSITION_OFFSET = 1_000_000
 _NAME_MAX = 200
 _DISPLAY_NAME_MAX = 300
 _PROOF_PURPOSE_MAX = 4000
@@ -284,6 +287,17 @@ def save_items(
         if evidence_id not in keep_ids:
             db.delete(item)
     db.flush()  # deletions land before the reorder insert/update pass
+
+    # Two-phase numbering: park every surviving row on a temporary position
+    # first, then assign the final 1..N. SQLite checks UNIQUE per statement,
+    # so a swap (1<->2) would collide mid-flush without this; PostgreSQL
+    # normally covers that with DEFERRABLE UNIQUE constraints.
+    for position, it in enumerate(items, start=1):
+        item = existing.get(it.evidence_id)
+        if item is not None:
+            item.item_order = position + _TEMP_POSITION_OFFSET
+            item.display_number = position + _TEMP_POSITION_OFFSET
+    db.flush()
 
     for position, it in enumerate(items, start=1):
         evidence = evidence_map[it.evidence_id]

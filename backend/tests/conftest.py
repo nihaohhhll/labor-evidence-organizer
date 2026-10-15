@@ -24,20 +24,20 @@ from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import create_engine, text  # noqa: E402
 
 from app.config import get_settings  # noqa: E402
-from app.db import Base, get_db  # noqa: E402
+from app.db import Base, engine_kwargs, get_db, create_schema  # noqa: E402
 from app.main import app  # noqa: E402
 from app.storage import get_storage, reset_storage  # noqa: E402
 
 settings = get_settings()
 
-test_engine = create_engine(settings.test_database_url, pool_pre_ping=True, future=True)
+test_engine = create_engine(settings.test_database_url, **engine_kwargs(settings.test_database_url, echo=False))
 
 
 @pytest.fixture(scope="session", autouse=True)
 def _prepare_test_database():
     """Drop and recreate the test schema once per test session."""
     Base.metadata.drop_all(test_engine)
-    Base.metadata.create_all(test_engine)
+    create_schema(test_engine)
     yield
     Base.metadata.drop_all(test_engine)
     test_engine.dispose()
@@ -48,9 +48,14 @@ def _clean_tables():
     """Truncate every table between tests so tests stay independent."""
     yield
     with test_engine.begin() as conn:
-        tables = ", ".join(f'"{t}"' for t in reversed(Base.metadata.sorted_tables))
-        if tables:
-            conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
+        if settings.test_database_url.startswith("sqlite"):
+            # SQLite has no TRUNCATE; delete children first (reversed order).
+            for table in reversed(Base.metadata.sorted_tables):
+                conn.execute(table.delete())
+        else:
+            tables = ", ".join(f'"{t}"' for t in reversed(Base.metadata.sorted_tables))
+            if tables:
+                conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
 
 
 @pytest.fixture(autouse=True)

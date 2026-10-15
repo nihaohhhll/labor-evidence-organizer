@@ -141,9 +141,11 @@ def test_merge_is_committed_to_database(client, auth_headers, case_id):
     from sqlalchemy.orm import sessionmaker
 
     from app.config import get_settings
+    from app.db import engine_kwargs
     from app.models.event import Event
 
-    engine = create_engine(get_settings().test_database_url, pool_pre_ping=True, future=True)
+    _url = get_settings().test_database_url
+    engine = create_engine(_url, **engine_kwargs(_url, echo=False))
     Session = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     db = Session()
     try:

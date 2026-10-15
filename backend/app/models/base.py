@@ -28,16 +28,27 @@ class UUIDPk:
 
 
 class TimestampMixin:
-    """created_at / updated_at maintained by the database."""
+    """created_at / updated_at maintained by SQLAlchemy.
+
+    Defaults are Python-side (utcnow) so every insert/update carries
+    microsecond-precision UTC even on SQLite, where the SQL fallback
+    CURRENT_TIMESTAMP only has second precision — snapshot change detection
+    (material_packages) compares updated_at values taken within the same
+    second. func.now() stays as server_default for raw-SQL inserts.
+    """
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+        DateTime(timezone=True),
+        nullable=False,
+        default=utcnow,
+        server_default=func.now(),
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
+        default=utcnow,
         server_default=func.now(),
-        onupdate=func.now(),
+        onupdate=utcnow,
     )
 
 

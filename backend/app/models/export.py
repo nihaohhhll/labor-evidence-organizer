@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import UUID as PGUUID
 
@@ -67,7 +67,10 @@ class ExportJob(Base, UUIDPk, TimestampMixin):
     )
     snapshot_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     include_gap_appendix: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, server_default="false"
+        # sa.text so DDL renders `DEFAULT false` (bare keyword) — valid on
+        # PostgreSQL and SQLite alike; a quoted 'false' literal would be
+        # stored as text by SQLite's boolean affinity.
+        Boolean, nullable=False, default=False, server_default=text("false")
     )
     gap_result_id: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True),

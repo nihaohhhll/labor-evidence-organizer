@@ -12,6 +12,11 @@ const nextConfig = {
   // A second Next.js instance (:3002) serves the code-server-proxied path;
   // isolate its build cache from the local :3000 dev server.
   distDir: process.env.NEXT_DIST_DIR || ".next",
+
+  // self-contained server bundle for the Windows portable package
+  // (scripts/build-portable.sh runs `next build` and ships .next/standalone
+  // next to a bundled node.exe). `next dev`/`next start` are unaffected.
+  output: "standalone",
 };
 
 module.exports = nextConfig;
