@@ -120,7 +120,9 @@ rm -rf "$REPO/frontend/.next-portable"   # keep dev server's .next untouched
 log "launcher scripts + readme"
 cp "$REPO"/scripts/portable/{start,stop,start-backend,start-frontend}.bat "$STAGE/"
 cp "$REPO/scripts/portable/README.txt" "$STAGE/"
-cp "$REPO/scripts/portable/README_技术说明.md" "$STAGE/"
+# 安装版用的 makensis（Debian 3.08）在 Unicode true 下遇非 ASCII 文件名会段错误，
+# 所以进 stage 的副本用纯 ASCII 名；仓库里的源文件名不变。
+cp "$REPO/scripts/portable/README_技术说明.md" "$STAGE/README-tech.md"
 
 # ---- 5. zip ---------------------------------------------------------------
 log "zipping -> $OUT_ZIP"
